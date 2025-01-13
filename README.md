@@ -42,7 +42,7 @@ cargo run
 
 ## Roadmap
 
-Due to Kokoro actually not finalizing it's ability, this repo will keep tracking the status of Kokoro, and helpfully we can have language support incuding: English, Mandarian, Japanese, German, French etc.
+Due to Kokoro actually not finalizing it's ability, this repo will keep tracking the status of Kokoro, and helpfully we can have language support incuding: English, Mandarin, Japanese, German, French etc.
 
 
 ## Copyright
