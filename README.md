@@ -4,7 +4,6 @@
 ![img](https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg)
 
 
-<audio controls><source src="https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/demo/HEARME.wav" type="audio/wav"></audio>
 
 
 [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface. 
@@ -25,6 +24,7 @@ Languge support:
 
 ## Updates
 
+- ***`2025.01.13`***: Espeak-ng tokenizer and phonemizer supported! Kudos to @mindreframer ;
 - ***`2025.01.12`***: Released `Kokoros`;
 
 

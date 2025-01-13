@@ -4,5 +4,5 @@ mod utils;
 
 fn main() {
     let tts = tts::koko::TTSKoko::new("checkpoints/kokoro-v0_19.onnx");
-    tts.tts("Hello from Kokoro, your amazing AI TTS!");
+    tts.tts("Hello from Kokoro, your amazing AI TTS!", "af_bella");
 }

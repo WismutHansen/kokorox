@@ -25,14 +25,16 @@ voices = [
     "bm_lewis",
 ]
 voices_json = {}
-pattern = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/{voice}.pt"
+# pattern = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/{voice}.pt"
+# in case in China unable to access huggingface.co
+pattern = "https://hf-mirror.com/hexgrad/Kokoro-82M/resolve/main/voices/{voice}.pt"
 for voice in voices:
     url = pattern.format(voice=voice)
     print(f"Downloading {url}")
     r = requests.get(url)
     content = io.BytesIO(r.content)
     voice_data: np.ndarray = torch.load(content).numpy()
-    print(f'voice data: {voice_data.shape}')
+    print(f"voice data: {voice_data.shape}")
     # (511, 1, 256)
     voices_json[voice] = voice_data.tolist()
 

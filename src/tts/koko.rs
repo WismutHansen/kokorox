@@ -48,41 +48,36 @@ impl TTSKoko {
         instance
     }
 
-    pub fn tts(&self, style_name: &str) {
-        // given string, forward result
-        println!("hello, going to tts.");
-
-        // tokens, styles, speed
-        // i32, i32
+    pub fn tts(&self, txt: &str, style_name: &str) {
+        println!("hello, going to tts. text: {}", txt);
 
         let phonemes = "ɛz ju brið ɪn ðə dɛpθs əv jʊr soʊl, rɪˈmɛmbər ðət ˈɛvəri ˈhɑrtˌbit ɪz ə riˈmaɪndər əv jʊr ˈɪnfənət pəˈtɛnʃəl, ənd ˈɛvəri brɛθ ɪz ə ʧæns tɪ əˈweɪkən tɪ ðə ˈlɪmətləs ˈbjuti ənd ˈwɪzdəm ðət laɪz wɪˈθɪn ju.";
+        // todo, phonemizer working in progress?
         let tokens = vec![tokenize(phonemes)];
 
-        println!("tokens: {:?}", tokens);
+        // for debug
+        // println!("tokens: {:?}", tokens);
+        // println!("VOCAB: {:#?}", *VOCAB);
+        // print_sorted_reverse_vocab();
 
-        println!("VOCAB: {:#?}", *VOCAB);
-        print_sorted_reverse_vocab();
-        let styles: Vec<Vec<f32>> = self
-            .styles
-            .values()
-            .nth(1)
-            .map(|style| {
-                // Assume style is in [[[f32; 256]; 1]; 511] format
-                // We only take the first element, so we get a shape of [1, 256]
-                vec![style[0][0].to_vec()]
-            })
-            .unwrap_or_else(|| vec![vec![0.0; 256]]);
+        if let Some(style) = self.styles.get(style_name) {
+            let styles = vec![style[0][0].to_vec()];
 
-        let start_t = Instant::now();
+            let start_t = Instant::now();
 
-        let out = self.model.infer(tokens, styles);
-        println!("output: {:?}", out);
+            let out = self.model.infer(tokens, styles);
+            println!("output: {:?}", out);
 
-        // save out to audio.wav
-        if let Ok(out) = out {
-            let phonemes_len = phonemes.len();
-            self.process_and_save_audio(start_t, out, phonemes_len)
-                .expect("save audio failed.");
+            if let Ok(out) = out {
+                let phonemes_len = phonemes.len();
+                self.process_and_save_audio(start_t, out, phonemes_len)
+                    .expect("save audio failed.");
+            }
+        } else {
+            println!(
+                "{} not found, choose one from data/voices.json style key.",
+                style_name
+            );
         }
     }
 
@@ -95,13 +90,8 @@ impl TTSKoko {
         // Convert output to standard Vec
         let audio: Vec<f32> = output.iter().cloned().collect();
 
-        // Calculate audio duration
         let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
-
-        // Calculate creation time
         let create_duration = start_t.elapsed().as_secs_f32();
-
-        // Calculate speedup factor
         let speedup_factor = audio_duration / create_duration;
 
         println!(
@@ -109,7 +99,6 @@ impl TTSKoko {
             audio_duration, phonemes_len, create_duration, speedup_factor
         );
 
-        // Save as WAV file
         let spec = hound::WavSpec {
             channels: 1,
             sample_rate: TTSKoko::SAMPLE_RATE,
@@ -126,7 +115,6 @@ impl TTSKoko {
         writer.finalize()?;
 
         println!("Audio saved to output.wav");
-
         Ok(())
     }
 
