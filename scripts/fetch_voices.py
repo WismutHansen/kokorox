@@ -36,5 +36,5 @@ for voice in voices:
     # (511, 1, 256)
     voices_json[voice] = voice_data.tolist()
 
-with open("voices.json", "w") as f:
+with open("data/voices.json", "w") as f:
     json.dump(voices_json, f, indent=4)

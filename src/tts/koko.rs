@@ -61,8 +61,8 @@ impl TTSKoko {
             .values()
             .nth(1)
             .map(|style| {
-                // 假设 style 是 [[[f32; 256]; 1]; 511] 格式
-                // 我们只取第一个元素，这样就得到 [1, 256] 的形状
+                // Assume style is in [[[f32; 256]; 1]; 511] format
+                // We only take the first element, so we get a shape of [1, 256]
                 vec![style[0][0].to_vec()]
             })
             .unwrap_or_else(|| vec![vec![0.0; 256]]);
@@ -84,16 +84,16 @@ impl TTSKoko {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let start_t = Instant::now();
 
-        // 将输出转换为标准 Vec
+        // Convert output to standard Vec
         let audio: Vec<f32> = output.iter().cloned().collect();
 
-        // 计算音频时长
+        // Calculate audio duration
         let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
 
-        // 计算创建时间
+        // Calculate creation time
         let create_duration = start_t.elapsed().as_secs_f32();
 
-        // 计算加速因子
+        // Calculate speedup factor
         let speedup_factor = audio_duration / create_duration;
 
         println!(
@@ -101,7 +101,7 @@ impl TTSKoko {
             audio_duration, phonemes_len, create_duration, speedup_factor
         );
 
-        // 保存为 WAV 文件
+        // Save as WAV file
         let spec = hound::WavSpec {
             channels: 1,
             sample_rate: TTSKoko::SAMPLE_RATE,
@@ -128,18 +128,18 @@ impl TTSKoko {
         if let Ok(values) = values {
             if let Some(obj) = values.as_object() {
                 for (key, value) in obj {
-                    // 检查值是否为数组
+                    // Check if value is an array
                     if let Some(outer_array) = value.as_array() {
-                        // 定义目标多维数组
+                        // Define target multidimensional array
                         let mut array_3d = [[[0.0; 256]; 1]; 511];
 
-                        // 遍历外层数组（511 个元素）
+                        // Iterate through outer array (511 elements)
                         for (i, inner_value) in outer_array.iter().enumerate() {
                             if let Some(middle_array) = inner_value.as_array() {
-                                // 遍历中层数组（1 个元素）
+                                // Iterate through middle array (1 element)
                                 for (j, inner_inner_value) in middle_array.iter().enumerate() {
                                     if let Some(inner_array) = inner_inner_value.as_array() {
-                                        // 遍历内层数组（256 个元素）
+                                        // Iterate through inner array (256 elements)
                                         for (k, number) in inner_array.iter().enumerate() {
                                             if let Some(num) = number.as_f64() {
                                                 array_3d[i][j][k] = num as f32;
@@ -150,7 +150,7 @@ impl TTSKoko {
                             }
                         }
 
-                        // 将多维数组插入 HashMap
+                        // Insert multidimensional array into HashMap
                         self.styles.insert(key.clone(), array_3d);
                     }
                 }
