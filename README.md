@@ -22,6 +22,11 @@ Languge support:
 - [x] German (partly);
 
 
+> 🔥🔥🔥🔥🔥🔥🔥🔥🔥 Kokoros Rust version just got a lot attention now. If you also interested in insanely fast inference, embeded build, wasm support etc, please star this repo! We are keep updating it.
+
+
+
+
 ## Updates
 
 - ***`2025.01.15`***: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
@@ -30,6 +35,12 @@ Languge support:
 
 
 ## Build
+
+First, fetch the `voices.json` data, this is need same as Kokoro official step.
+
+```
+python scripts/fetch_voices.py
+```
 
 Run:
 
