@@ -24,8 +24,8 @@ Languge support:
 
 ## Updates
 
-- ***`2025.01.15`***: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to @tstm;
-- ***`2025.01.13`***: Espeak-ng tokenizer and phonemizer supported! Kudos to @mindreframer ;
+- ***`2025.01.15`***: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
+- ***`2025.01.13`***: Espeak-ng tokenizer and phonemizer supported! Kudos to [@mindreframer](https://github.com/mindreframer) ;
 - ***`2025.01.12`***: Released `Kokoros`;
 
 
