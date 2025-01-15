@@ -25,6 +25,7 @@ Languge support:
 > 🔥🔥🔥🔥🔥🔥🔥🔥🔥 Kokoros Rust version just got a lot attention now. If you also interested in insanely fast inference, embeded build, wasm support etc, please star this repo! We are keep updating it.
 
 
+> Currently help wanted! Implement OpenAI compatible API in Rust, anyone interested? Send me PR!
 
 
 ## Updates
