@@ -12,6 +12,8 @@ use crate::onn::ort_koko::{self, OrtKoko};
 use crate::utils;
 use crate::utils::fileio::load_json_file;
 
+use espeak_rs::text_to_phonemes;
+
 pub struct TTSKoko {
     model_path: String,
     model: ort_koko::OrtKoko,
@@ -48,12 +50,16 @@ impl TTSKoko {
         instance
     }
 
-    pub fn tts(&self, txt: &str, style_name: &str) {
+    pub fn tts(&self, txt: &str, language: &str, style_name: &str) {
         println!("hello, going to tts. text: {}", txt);
 
-        let phonemes = "ɛz ju brið ɪn ðə dɛpθs əv jʊr soʊl, rɪˈmɛmbər ðət ˈɛvəri ˈhɑrtˌbit ɪz ə riˈmaɪndər əv jʊr ˈɪnfənət pəˈtɛnʃəl, ənd ˈɛvəri brɛθ ɪz ə ʧæns tɪ əˈweɪkən tɪ ðə ˈlɪmətləs ˈbjuti ənd ˈwɪzdəm ðət laɪz wɪˈθɪn ju.";
+        let phonemes = text_to_phonemes(txt, language, None, true, false)
+            .expect("Failed to phonemize given text using espeak-ng.")
+            .join("");
+
+        // let phonemes = "ɛz ju brið ɪn ðə dɛpθs əv jʊr soʊl, rɪˈmɛmbər ðət ˈɛvəri ˈhɑrtˌbit ɪz ə riˈmaɪndər əv jʊr ˈɪnfənət pəˈtɛnʃəl, ənd ˈɛvəri brɛθ ɪz ə ʧæns tɪ əˈweɪkən tɪ ðə ˈlɪmətləs ˈbjuti ənd ˈwɪzdəm ðət laɪz wɪˈθɪn ju.";
         // todo, phonemizer working in progress?
-        let tokens = vec![tokenize(phonemes)];
+        let tokens = vec![tokenize(&phonemes)];
 
         // for debug
         // println!("tokens: {:?}", tokens);
