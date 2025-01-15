@@ -40,6 +40,18 @@ cargo build --release
 cargo run
 ```
 
+For production:
+
+```shell
+
+cargo build --release
+
+./target/release/koko -h
+./target/release/koko -t 'Hello, this is a TTS test'
+```
+
+For further development, for example, supports on embeded etc, please raise an issue to discuss your requirement.
+
 
 ## Roadmap
 
