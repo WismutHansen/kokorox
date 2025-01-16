@@ -120,7 +120,7 @@ impl TTSKoko {
 
         writer.finalize()?;
 
-        println!("Audio saved to output.wav");
+        println!("Audio saved to tmp/output.wav");
         Ok(())
     }
 
