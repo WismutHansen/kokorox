@@ -30,30 +30,22 @@ Languge support:
 
 ## Updates
 
-- ***`2025.01.15`***: OpenAI compatible server supported!
+- ***`2025.01.15`***: OpenAI compatible server supported, openai format still under polish!
 - ***`2025.01.15`***: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
 - ***`2025.01.13`***: Espeak-ng tokenizer and phonemizer supported! Kudos to [@mindreframer](https://github.com/mindreframer) ;
 - ***`2025.01.12`***: Released `Kokoros`;
 
 ## Installation
 
-1. Set up the Python environment:
-
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r scripts/requirements.txt
-```
-
-2. Initialize voice data:
+1. Initialize voice data:
 
 ```bash
 python scripts/fetch_voices.py
 ```
 
-This step fetches the required `voices.json` data file, which is necessary for voice synthesis.
+This step fetches the required `voices.json` data file, which is necessary for voice synthesis. 
 
-3. Build the project:
+2. Build the project:
 
 ```bash
 cargo build --release
