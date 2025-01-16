@@ -30,40 +30,80 @@ Languge support:
 
 ## Updates
 
+- ***`2025.01.15`***: OpenAI compatible server supported!
 - ***`2025.01.15`***: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
 - ***`2025.01.13`***: Espeak-ng tokenizer and phonemizer supported! Kudos to [@mindreframer](https://github.com/mindreframer) ;
 - ***`2025.01.12`***: Released `Kokoros`;
 
+## Installation
 
-## Build
+1. Set up the Python environment:
 
-First, fetch the `voices.json` data, this is need same as Kokoro official step.
-
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r scripts/requirements.txt
 ```
+
+2. Initialize voice data:
+
+```bash
 python scripts/fetch_voices.py
 ```
 
-Run:
+This step fetches the required `voices.json` data file, which is necessary for voice synthesis.
 
-```shell
+3. Build the project:
+
+```bash
 cargo build --release
+```
 
-# test
+## Usage
+
+Test the installation:
+
+```bash
 cargo run
 ```
 
-For production:
+For production use:
 
-```shell
-
-cargo build --release
-
-./target/release/koko -h
-./target/release/koko -t 'Hello, this is a TTS test'
+```bash
+./target/release/koko -h        # View available options
+./target/release/koko -t "Hello, this is a TTS test"
 ```
 
-For further development, for example, supports on embeded etc, please raise an issue to discuss your requirement.
+The generated audio will be saved to:
+```
+tmp/output.wav
+```
 
+### OpenAI-Compatible Server
+
+1. Start the server:
+
+```bash
+cargo run -- --oai
+```
+
+2. Make API requests using either curl or Python:
+
+Using curl:
+```bash
+curl -X POST http://localhost:3000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1",
+    "input": "Hello, this is a test of the Kokoro TTS system!",
+    "voice": "af_sky"
+  }'
+```
+
+Using Python:
+```bash
+python scripts/run_openai.py
+```
 
 ## Roadmap
 
