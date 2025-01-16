@@ -1,22 +1,22 @@
 use crate::tts::tokenize::tokenize;
-use crate::tts::vocab::print_sorted_reverse_vocab;
-use crate::tts::vocab::VOCAB;
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Instant;
+use std::sync::Arc;
 
-use ndarray::{ArrayBase, ArrayView1, IxDyn, OwnedRepr};
+use ndarray::{ArrayBase, IxDyn, OwnedRepr};
 
 use crate::onn::ort_base::OrtBase;
-use crate::onn::ort_koko::{self, OrtKoko};
+use crate::onn::ort_koko::{self};
 use crate::utils;
 use crate::utils::fileio::load_json_file;
 
 use espeak_rs::text_to_phonemes;
 
+#[derive(Clone)]
 pub struct TTSKoko {
     model_path: String,
-    model: ort_koko::OrtKoko,
+    model: Arc<ort_koko::OrtKoko>,
     styles: HashMap<String, [[[f32; 256]; 1]; 511]>,
 }
 
@@ -36,8 +36,10 @@ impl TTSKoko {
             println!("load model from: {}", model_path);
         }
 
-        let model = ort_koko::OrtKoko::new(model_path.to_string())
-            .expect("Failed to create Kokoro TTS model");
+        let model = Arc::new(
+            ort_koko::OrtKoko::new(model_path.to_string())
+                .expect("Failed to create Kokoro TTS model")
+        );
 
         model.print_info();
 
@@ -50,40 +52,28 @@ impl TTSKoko {
         instance
     }
 
-    pub fn tts(&self, txt: &str, language: &str, style_name: &str) {
+    pub fn tts(&self, txt: &str, language: &str, style_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!("hello, going to tts. text: {}", txt);
 
         let phonemes = text_to_phonemes(txt, language, None, true, false)
-            .expect("Failed to phonemize given text using espeak-ng.")
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
             .join("");
 
-        // let phonemes = "ɛz ju brið ɪn ðə dɛpθs əv jʊr soʊl, rɪˈmɛmbər ðət ˈɛvəri ˈhɑrtˌbit ɪz ə riˈmaɪndər əv jʊr ˈɪnfənət pəˈtɛnʃəl, ənd ˈɛvəri brɛθ ɪz ə ʧæns tɪ əˈweɪkən tɪ ðə ˈlɪmətləs ˈbjuti ənd ˈwɪzdəm ðət laɪz wɪˈθɪn ju.";
-        // todo, phonemizer working in progress?
         let tokens = vec![tokenize(&phonemes)];
-
-        // for debug
-        // println!("tokens: {:?}", tokens);
-        // println!("VOCAB: {:#?}", *VOCAB);
-        // print_sorted_reverse_vocab();
 
         if let Some(style) = self.styles.get(style_name) {
             let styles = vec![style[0][0].to_vec()];
 
             let start_t = Instant::now();
 
-            let out = self.model.infer(tokens, styles);
+            let out = self.model.infer(tokens, styles)?;
             println!("output: {:?}", out);
 
-            if let Ok(out) = out {
-                let phonemes_len = phonemes.len();
-                self.process_and_save_audio(start_t, out, phonemes_len)
-                    .expect("save audio failed.");
-            }
+            let phonemes_len = phonemes.len();
+            self.process_and_save_audio(start_t, out, phonemes_len)?;
+            Ok(())
         } else {
-            println!(
-                "{} not found, choose one from data/voices.json style key.",
-                style_name
-            );
+            Err(format!("{} not found, choose one from data/voices.json style key.", style_name).into())
         }
     }
 
