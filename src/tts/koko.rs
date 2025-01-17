@@ -1,8 +1,9 @@
 use crate::tts::tokenize::tokenize;
+use core::error;
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Instant;
 use std::sync::Arc;
+use std::time::Instant;
 
 use ndarray::{ArrayBase, IxDyn, OwnedRepr};
 
@@ -38,7 +39,7 @@ impl TTSKoko {
 
         let model = Arc::new(
             ort_koko::OrtKoko::new(model_path.to_string())
-                .expect("Failed to create Kokoro TTS model")
+                .expect("Failed to create Kokoro TTS model"),
         );
 
         model.print_info();
@@ -52,18 +53,21 @@ impl TTSKoko {
         instance
     }
 
-    pub fn tts(&self, txt: &str, language: &str, style_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn tts(
+        &self,
+        txt: &str,
+        lan: &str,
+        style_name: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         println!("hello, going to tts. text: {}", txt);
 
-        let phonemes = text_to_phonemes(txt, language, None, true, false)
+        let phonemes = text_to_phonemes(txt, lan, None, true, false)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
             .join("");
 
         let tokens = vec![tokenize(&phonemes)];
 
-        if let Some(style) = self.styles.get(style_name) {
-            let styles = vec![style[0][0].to_vec()];
-
+        if let Ok(styles) = self.mix_styles(style_name) {
             let start_t = Instant::now();
 
             let out = self.model.infer(tokens, styles)?;
@@ -73,7 +77,50 @@ impl TTSKoko {
             self.process_and_save_audio(start_t, out, phonemes_len)?;
             Ok(())
         } else {
-            Err(format!("{} not found, choose one from data/voices.json style key.", style_name).into())
+            Err(format!("{} failed to parse this style_name.", style_name).into())
+        }
+    }
+
+    pub fn mix_styles(
+        &self,
+        style_name: &str,
+    ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+        if !style_name.contains("+") {
+            if let Some(style) = self.styles.get(style_name) {
+                let styles = vec![style[0][0].to_vec()];
+                Ok(styles)
+            } else {
+                Err(format!("can not found from styles_map: {}", style_name).into())
+            }
+        } else {
+            println!("parsing style mix");
+            let styles: Vec<&str> = style_name.split('+').collect();
+
+            let mut style_names = Vec::new();
+            let mut style_portions = Vec::new();
+
+            for style in styles {
+                if let Some((name, portion)) = style.split_once('.') {
+                    if let Ok(portion) = portion.parse::<f32>() {
+                        style_names.push(name);
+                        style_portions.push(portion * 0.1);
+                    }
+                }
+            }
+            println!("styles: {:?}, portions: {:?}", style_names, style_portions);
+
+            let mut blended_style = vec![vec![0.0; 256]; 1];
+
+            for (name, portion) in style_names.iter().zip(style_portions.iter()) {
+                if let Some(style) = self.styles.get(*name) {
+                    let style_slice = &style[0][0]; // This is a [256] array
+                                                    // Blend into the blended_style
+                    for j in 0..256 {
+                        blended_style[0][j] += style_slice[j] * portion;
+                    }
+                }
+            }
+            Ok(blended_style)
         }
     }
 

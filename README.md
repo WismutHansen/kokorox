@@ -33,6 +33,7 @@ New Discord community: https://discord.gg/nN4tCXC6, Please join us if you intere
 
 ## Updates
 
+- ***`2025.01.17`***: 🔥🔥🔥 Style mixing supported! Now, listen the output AMSR effect by simply specific style: `af_sky.4+af_nicole.5`;
 - ***`2025.01.15`***: OpenAI compatible server supported, openai format still under polish!
 - ***`2025.01.15`***: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
 - ***`2025.01.13`***: Espeak-ng tokenizer and phonemizer supported! Kudos to [@mindreframer](https://github.com/mindreframer) ;

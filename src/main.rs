@@ -4,8 +4,8 @@ mod tts;
 mod utils;
 
 use clap::Parser;
-use tts::koko::TTSKoko;
 use std::net::SocketAddr;
+use tts::koko::TTSKoko;
 
 #[derive(Parser, Debug)]
 #[command(name = "kokoros")]
@@ -15,8 +15,19 @@ struct Cli {
     #[arg(short = 't', long = "text", value_name = "TEXT")]
     text: Option<String>,
 
-    #[arg(short = 'l', long = "language", value_name = "LANGUAGE", help="https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md")]
-    language: Option<String>,
+    #[arg(
+        short = 'l',
+        long = "lan",
+        value_name = "LANGUAGE",
+        help = "https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md"
+    )]
+    lan: Option<String>,
+
+    #[arg(short = 'm', long = "model", value_name = "MODEL")]
+    model: Option<String>,
+
+    #[arg(short = 's', long = "style", value_name = "STYLE")]
+    style: Option<String>,
 
     #[arg(long = "oai", value_name = "OpenAI server")]
     oai: bool,
@@ -27,10 +38,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     rt.block_on(async {
         let args = Cli::parse();
 
+        // if users use `af_sky.4+af_nicho.3` as style name
+        // then we blend it, with 0.4 af_sky + 0.3 af_nicho
+
+        let model_path = args.model.unwrap_or_else(|| "checkpoints/kokoro-v0_19.onnx".to_string());
+        let style = args.style.unwrap_or_else(|| "af_sky.4+af_nicole.5".to_string());
+        let lan = args.lan.unwrap_or_else(|| { "en-us".to_string() });
+
+        let tts = TTSKoko::new(&model_path);
+
         if args.oai {
-            let tts = TTSKoko::new("checkpoints/kokoro-v0_19.onnx");
             let app = serve::openai::create_server(tts).await;
-            
             let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
             println!("Starting OpenAI-compatible server on http://localhost:3000");
             axum::serve(
@@ -48,10 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "#
                 .to_string()
             });
-            let language = args.language.unwrap_or_else(|| { "en-us".to_string() });
-
-            let tts = TTSKoko::new("checkpoints/kokoro-v0_19.onnx");
-            tts.tts(&txt, &language, "af_sky");
+            let _ = tts.tts(&txt, &lan, &style);
             Ok(())
         }
     })
