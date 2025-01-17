@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // then we blend it, with 0.4 af_sky + 0.3 af_nicho
 
         let model_path = args.model.unwrap_or_else(|| "checkpoints/kokoro-v0_19.onnx".to_string());
-        let style = args.style.unwrap_or_else(|| "af_sky.4+af_nicole.5".to_string());
+        let style = args.style.unwrap_or_else(|| "af_sarah.4+af_nicole.6".to_string());
         let lan = args.lan.unwrap_or_else(|| { "en-us".to_string() });
 
         let tts = TTSKoko::new(&model_path);
@@ -60,9 +60,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             let txt = args.text.unwrap_or_else(|| {
                 r#"
-                Hello, This is Kokoro. Your amazing AI TTS! A TTS model with only 82 million parameters that achieve incredible audio quality. 
-                This is the one of the best Rust inference, I help you will like it. 
-                Please give us a star if you do, thank you very much.
+                Hello, This is Kokoro, your remarkable AI TTS. It's a TTS model with merely 82 million parameters yet delivers incredible audio quality.
+This is one of the top notch Rust based inference models, and I'm sure you'll love it. If you do, please give us a star. Thank you very much. 
+ As the night falls, I wish you all a peaceful and restful sleep. May your dreams be filled with joy and happiness. Good night, and sweet dreams!
                 "#
                 .to_string()
             });

@@ -69,12 +69,19 @@ impl TTSKoko {
 
         if let Ok(styles) = self.mix_styles(style_name) {
             let start_t = Instant::now();
+            // println!("styles: {:?}", styles);
+            let result = self.model.infer(tokens, styles);
+            match result {
+                Ok(out) => {
+                    println!("output: {:?}", out);
+                    let phonemes_len = phonemes.len();
+                    self.process_and_save_audio(start_t, out, phonemes_len)?;
+                }
+                Err(e) => {
+                    eprintln!("An error occurred during inference: {:?}", e);
+                }
+            }
 
-            let out = self.model.infer(tokens, styles)?;
-            println!("output: {:?}", out);
-
-            let phonemes_len = phonemes.len();
-            self.process_and_save_audio(start_t, out, phonemes_len)?;
             Ok(())
         } else {
             Err(format!("{} failed to parse this style_name.", style_name).into())
