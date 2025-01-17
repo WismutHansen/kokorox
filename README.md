@@ -4,7 +4,7 @@
 ![img](https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg)
 
 
-
+<iframe width="560" height="315" src="data/video-1737110239209.webm" frameborder="0" allowfullscreen></iframe>
 
 [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface. 
 This repo provides **insanely fast Kokoro infer in Rust**, you can now have your built TTS engine powered by Kokoro and infer fast by only a command of `koko`.
