@@ -15,6 +15,9 @@ struct Cli {
     #[arg(short = 't', long = "text", value_name = "TEXT")]
     text: Option<String>,
 
+    #[arg(short = 'l', long = "language", value_name = "LANGUAGE", help="https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md")]
+    language: Option<String>,
+
     #[arg(long = "oai", value_name = "OpenAI server")]
     oai: bool,
 }
@@ -45,9 +48,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "#
                 .to_string()
             });
+            let language = args.language.unwrap_or_else(|| { "en-us".to_string() });
 
             let tts = TTSKoko::new("checkpoints/kokoro-v0_19.onnx");
-            tts.tts(&txt, "en-us", "af_sky");
+            tts.tts(&txt, &language, "af_sky");
             Ok(())
         }
     })
