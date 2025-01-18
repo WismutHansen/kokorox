@@ -203,7 +203,9 @@ impl TTSKoko {
             }
 
             println!("voice styles loaded: {}", self.styles.len());
-            println!("{:?}", self.styles.keys());
+            let mut keys: Vec<_> = self.styles.keys().cloned().collect();
+            keys.sort();
+            println!("{:?}", keys);
             println!(
                 "{:?} {:?}",
                 self.styles.keys().next(),
