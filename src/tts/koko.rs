@@ -1,6 +1,6 @@
 use crate::tts::tokenize::tokenize;
-use core::error;
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
@@ -53,13 +53,13 @@ impl TTSKoko {
         instance
     }
 
-    pub fn tts(
+    pub fn tts_raw_audio(
         &self,
         txt: &str,
         lan: &str,
         style_name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        println!("hello, going to tts. text: {}", txt);
+    ) -> Result<(Vec<u8>, Vec<f32>), Box<dyn std::error::Error>> {
+        println!("Processing TTS request for text: {}", txt);
 
         let phonemes = text_to_phonemes(txt, lan, None, true, false)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
@@ -69,23 +69,79 @@ impl TTSKoko {
 
         if let Ok(styles) = self.mix_styles(style_name) {
             let start_t = Instant::now();
-            // println!("styles: {:?}", styles);
             let result = self.model.infer(tokens, styles);
             match result {
                 Ok(out) => {
-                    println!("output: {:?}", out);
+                    let audio: Vec<f32> = out.iter().cloned().collect();
                     let phonemes_len = phonemes.len();
-                    self.process_and_save_audio(start_t, out, phonemes_len)?;
+
+                    // Create WAV data in memory
+                    let spec = hound::WavSpec {
+                        channels: 1,
+                        sample_rate: TTSKoko::SAMPLE_RATE,
+                        bits_per_sample: 32,
+                        sample_format: hound::SampleFormat::Float,
+                    };
+
+                    let mut cursor = Cursor::new(Vec::new());
+                    {
+                        let mut writer = hound::WavWriter::new(&mut cursor, spec)?;
+                        for &sample in &audio {
+                            writer.write_sample(sample)?;
+                        }
+                        writer.finalize()?;
+                    }
+
+                    let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
+                    let create_duration = start_t.elapsed().as_secs_f32();
+                    println!(
+                        "Created audio in length of {:.2}s for {} phonemes in {:.2}s ({:.2}x real-time)",
+                        audio_duration,
+                        phonemes_len,
+                        create_duration,
+                        audio_duration / create_duration
+                    );
+
+                    Ok((cursor.into_inner(), audio))
                 }
                 Err(e) => {
                     eprintln!("An error occurred during inference: {:?}", e);
+                    Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Inference failed",
+                    )))
                 }
             }
-
-            Ok(())
         } else {
             Err(format!("{} failed to parse this style_name.", style_name).into())
         }
+    }
+
+    pub fn tts(
+        &self,
+        txt: &str,
+        lan: &str,
+        style_name: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let output_path = "tmp/output.wav";
+        let (_, audio) = self.tts_raw_audio(txt, lan, style_name)?;
+
+        // Save to file
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: TTSKoko::SAMPLE_RATE,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+
+        let mut writer = hound::WavWriter::create(output_path, spec)?;
+        for &sample in &audio {
+            writer.write_sample(sample)?;
+        }
+        writer.finalize()?;
+
+        println!("Audio saved to {}", output_path);
+        Ok(())
     }
 
     pub fn mix_styles(
