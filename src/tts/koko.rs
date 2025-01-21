@@ -1,9 +1,11 @@
 use crate::tts::tokenize::tokenize;
+use crate::utils::wav::{write_audio_chunk, WavHeader};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::mpsc;
 
 use ndarray::{ArrayBase, IxDyn, OwnedRepr};
 
@@ -34,7 +36,7 @@ impl TTSKoko {
             utils::fileio::download_file_from_url(TTSKoko::MODEL_URL, model_path)
                 .expect("download model failed.");
         } else {
-            println!("load model from: {}", model_path);
+            eprintln!("load model from: {}", model_path);
         }
 
         let model = Arc::new(
@@ -42,7 +44,8 @@ impl TTSKoko {
                 .expect("Failed to create Kokoro TTS model"),
         );
 
-        model.print_info();
+        // TODO: if(not streaming) { model.print_info(); }
+        // model.print_info();
 
         let mut instance = TTSKoko {
             model_path: model_path.to_string(),
@@ -59,8 +62,6 @@ impl TTSKoko {
         lan: &str,
         style_name: &str,
     ) -> Result<(Vec<u8>, Vec<f32>), Box<dyn std::error::Error>> {
-        println!("Processing TTS request for text: {}", txt);
-
         let phonemes = text_to_phonemes(txt, lan, None, true, false)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
             .join("");
@@ -73,36 +74,14 @@ impl TTSKoko {
             match result {
                 Ok(out) => {
                     let audio: Vec<f32> = out.iter().cloned().collect();
-                    let phonemes_len = phonemes.len();
 
-                    // Create WAV data in memory
-                    let spec = hound::WavSpec {
-                        channels: 1,
-                        sample_rate: TTSKoko::SAMPLE_RATE,
-                        bits_per_sample: 32,
-                        sample_format: hound::SampleFormat::Float,
-                    };
+                    // Create WAV data in memory (for compatibility with existing code)
+                    let mut wav_data = Vec::new();
+                    let header = WavHeader::new(1, Self::SAMPLE_RATE, 32);
+                    header.write_header(&mut wav_data)?;
+                    write_audio_chunk(&mut wav_data, &audio)?;
 
-                    let mut cursor = Cursor::new(Vec::new());
-                    {
-                        let mut writer = hound::WavWriter::new(&mut cursor, spec)?;
-                        for &sample in &audio {
-                            writer.write_sample(sample)?;
-                        }
-                        writer.finalize()?;
-                    }
-
-                    let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
-                    let create_duration = start_t.elapsed().as_secs_f32();
-                    println!(
-                        "Created audio in length of {:.2}s for {} phonemes in {:.2}s ({:.2}x real-time)",
-                        audio_duration,
-                        phonemes_len,
-                        create_duration,
-                        audio_duration / create_duration
-                    );
-
-                    Ok((cursor.into_inner(), audio))
+                    Ok((wav_data, audio))
                 }
                 Err(e) => {
                     eprintln!("An error occurred during inference: {:?}", e);
@@ -187,43 +166,6 @@ impl TTSKoko {
         }
     }
 
-    fn process_and_save_audio(
-        &self,
-        start_t: Instant,
-        output: ArrayBase<OwnedRepr<f32>, IxDyn>,
-        phonemes_len: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Convert output to standard Vec
-        let audio: Vec<f32> = output.iter().cloned().collect();
-
-        let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
-        let create_duration = start_t.elapsed().as_secs_f32();
-        let speedup_factor = audio_duration / create_duration;
-
-        println!(
-            "Created audio in length of {:.2}s for {} phonemes in {:.2}s ({:.2}x real-time)",
-            audio_duration, phonemes_len, create_duration, speedup_factor
-        );
-
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: TTSKoko::SAMPLE_RATE,
-            bits_per_sample: 32,
-            sample_format: hound::SampleFormat::Float,
-        };
-
-        let mut writer = hound::WavWriter::create("tmp/output.wav", spec)?;
-
-        for &sample in &audio {
-            writer.write_sample(sample)?;
-        }
-
-        writer.finalize()?;
-
-        println!("Audio saved to tmp/output.wav");
-        Ok(())
-    }
-
     pub fn load_voices(&mut self) {
         // load from json, get styles
         let values = load_json_file(TTSKoko::JSON_DATA_F);
@@ -258,11 +200,11 @@ impl TTSKoko {
                 }
             }
 
-            println!("voice styles loaded: {}", self.styles.len());
+            eprintln!("voice styles loaded: {}", self.styles.len());
             let mut keys: Vec<_> = self.styles.keys().cloned().collect();
             keys.sort();
-            println!("{:?}", keys);
-            println!(
+            eprintln!("{:?}", keys);
+            eprintln!(
                 "{:?} {:?}",
                 self.styles.keys().next(),
                 self.styles.keys().nth(1)
