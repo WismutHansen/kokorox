@@ -3,6 +3,10 @@ mod serve;
 mod tts;
 mod utils;
 
+use std::io::Write;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+use crate::utils::wav::{write_audio_chunk, WavHeader};
 use clap::Parser;
 use std::net::SocketAddr;
 use tts::koko::TTSKoko;
@@ -31,6 +35,46 @@ struct Cli {
 
     #[arg(long = "oai", value_name = "OpenAI server")]
     oai: bool,
+
+    #[arg(long = "stream", help = "Enable streaming mode")]
+    stream: bool,
+}
+async fn handle_streaming_mode(
+    tts: &TTSKoko,
+    lan: &str,
+    style: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let stdin = tokio::io::stdin();
+    let reader = BufReader::new(stdin);
+    let mut lines = reader.lines();
+
+    // Use std::io::stdout() for sync writing
+    let mut stdout = std::io::stdout();
+
+    // Write WAV header first
+    eprintln!("Entering streaming mode. Type text and press Enter. Use Ctrl+D to exit.");
+
+    let header = WavHeader::new(1, 24000, 32);
+    header.write_header(&mut stdout)?;
+    stdout.flush()?;
+
+    while let Some(line) = lines.next_line().await? {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        // Process the line and get audio data
+        match tts.tts_raw_audio(&line, lan, style) {
+            Ok(raw_audio) => {
+                // Write the raw audio samples directly
+                write_audio_chunk(&mut stdout, &raw_audio)?;
+                stdout.flush()?;
+            }
+            Err(e) => eprintln!("Error processing line: {}", e),
+        }
+    }
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -47,7 +91,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let tts = TTSKoko::new(&model_path);
 
-        if args.oai {
+        if args.stream {
+            handle_streaming_mode(&tts, &lan, &style).await?;
+            Ok(())
+        } else if args.oai {
             let app = serve::openai::create_server(tts).await;
             let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
             println!("Starting OpenAI-compatible server on http://localhost:3000");
@@ -61,7 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let txt = args.text.unwrap_or_else(|| {
                 r#"
                 Hello, This is Kokoro, your remarkable AI TTS. It's a TTS model with merely 82 million parameters yet delivers incredible audio quality.
-This is one of the top notch Rust based inference models, and I'm sure you'll love it. If you do, please give us a star. Thank you very much. 
+This is one of the top notch Rust based inference models, and I'm sure you'll love it. If you do, please give us a star. Thank you very much.
  As the night falls, I wish you all a peaceful and restful sleep. May your dreams be filled with joy and happiness. Good night, and sweet dreams!
                 "#
                 .to_string()

@@ -19,7 +19,7 @@ pub fn download_file_from_url(url: &str, path: &str) -> Result<(), Box<dyn std::
     if resp.status().is_success() {
         let total_size = resp.content_length().unwrap_or(0);
 
-        println!("total size: {}", total_size);
+        eprintln!("total size: {}", total_size);
 
         let pb = ProgressBar::new(total_size);
         pb.set_style(ProgressStyle::default_bar()

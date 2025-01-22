@@ -22,12 +22,13 @@ pub fn get_reverse_vocab() -> HashMap<usize, char> {
     VOCAB.iter().map(|(&c, &idx)| (idx, c)).collect()
 }
 
+#[allow(dead_code)]
 pub fn print_sorted_reverse_vocab() {
     let mut sorted_keys: Vec<_> = REVERSE_VOCAB.keys().collect();
     sorted_keys.sort();
 
     for key in sorted_keys {
-        println!("{}: {}", key, REVERSE_VOCAB[key]);
+        eprintln!("{}: {}", key, REVERSE_VOCAB[key]);
     }
 }
 

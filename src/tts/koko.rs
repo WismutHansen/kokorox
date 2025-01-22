@@ -1,13 +1,9 @@
 use crate::tts::tokenize::tokenize;
-use core::error;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ndarray::{ArrayBase, IxDyn, OwnedRepr};
-
-use crate::onn::ort_base::OrtBase;
 use crate::onn::ort_koko::{self};
 use crate::utils;
 use crate::utils::fileio::load_json_file;
@@ -16,6 +12,7 @@ use espeak_rs::text_to_phonemes;
 
 #[derive(Clone)]
 pub struct TTSKoko {
+    #[allow(dead_code)]
     model_path: String,
     model: Arc<ort_koko::OrtKoko>,
     styles: HashMap<String, [[[f32; 256]; 1]; 511]>,
@@ -26,7 +23,7 @@ impl TTSKoko {
         "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.onnx";
     const JSON_DATA_F: &str = "data/voices.json";
 
-    const SAMPLE_RATE: u32 = 24000;
+    pub const SAMPLE_RATE: u32 = 24000;
 
     pub fn new(model_path: &str) -> Self {
         let p = Path::new(model_path);
@@ -34,7 +31,7 @@ impl TTSKoko {
             utils::fileio::download_file_from_url(TTSKoko::MODEL_URL, model_path)
                 .expect("download model failed.");
         } else {
-            println!("load model from: {}", model_path);
+            eprintln!("load model from: {}", model_path);
         }
 
         let model = Arc::new(
@@ -42,7 +39,8 @@ impl TTSKoko {
                 .expect("Failed to create Kokoro TTS model"),
         );
 
-        model.print_info();
+        // TODO: if(not streaming) { model.print_info(); }
+        // model.print_info();
 
         let mut instance = TTSKoko {
             model_path: model_path.to_string(),
@@ -53,14 +51,12 @@ impl TTSKoko {
         instance
     }
 
-    pub fn tts(
+    pub fn tts_raw_audio(
         &self,
         txt: &str,
         lan: &str,
         style_name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        println!("hello, going to tts. text: {}", txt);
-
+    ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
         let phonemes = text_to_phonemes(txt, lan, None, true, false)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
             .join("");
@@ -69,23 +65,50 @@ impl TTSKoko {
 
         if let Ok(styles) = self.mix_styles(style_name) {
             let start_t = Instant::now();
-            // println!("styles: {:?}", styles);
             let result = self.model.infer(tokens, styles);
             match result {
                 Ok(out) => {
-                    println!("output: {:?}", out);
-                    let phonemes_len = phonemes.len();
-                    self.process_and_save_audio(start_t, out, phonemes_len)?;
+                    let audio: Vec<f32> = out.iter().cloned().collect();
+                    Ok(audio)
                 }
                 Err(e) => {
                     eprintln!("An error occurred during inference: {:?}", e);
+                    Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Inference failed",
+                    )))
                 }
             }
-
-            Ok(())
         } else {
             Err(format!("{} failed to parse this style_name.", style_name).into())
         }
+    }
+
+    pub fn tts(
+        &self,
+        txt: &str,
+        lan: &str,
+        style_name: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let output_path = "tmp/output.wav";
+        let audio = self.tts_raw_audio(txt, lan, style_name)?;
+
+        // Save to file
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: TTSKoko::SAMPLE_RATE,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+
+        let mut writer = hound::WavWriter::create(output_path, spec)?;
+        for &sample in &audio {
+            writer.write_sample(sample)?;
+        }
+        writer.finalize()?;
+
+        eprintln!("Audio saved to {}", output_path);
+        Ok(())
     }
 
     pub fn mix_styles(
@@ -100,7 +123,7 @@ impl TTSKoko {
                 Err(format!("can not found from styles_map: {}", style_name).into())
             }
         } else {
-            println!("parsing style mix");
+            eprintln!("parsing style mix");
             let styles: Vec<&str> = style_name.split('+').collect();
 
             let mut style_names = Vec::new();
@@ -114,7 +137,7 @@ impl TTSKoko {
                     }
                 }
             }
-            println!("styles: {:?}, portions: {:?}", style_names, style_portions);
+            eprintln!("styles: {:?}, portions: {:?}", style_names, style_portions);
 
             let mut blended_style = vec![vec![0.0; 256]; 1];
 
@@ -129,43 +152,6 @@ impl TTSKoko {
             }
             Ok(blended_style)
         }
-    }
-
-    fn process_and_save_audio(
-        &self,
-        start_t: Instant,
-        output: ArrayBase<OwnedRepr<f32>, IxDyn>,
-        phonemes_len: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Convert output to standard Vec
-        let audio: Vec<f32> = output.iter().cloned().collect();
-
-        let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
-        let create_duration = start_t.elapsed().as_secs_f32();
-        let speedup_factor = audio_duration / create_duration;
-
-        println!(
-            "Created audio in length of {:.2}s for {} phonemes in {:.2}s ({:.2}x real-time)",
-            audio_duration, phonemes_len, create_duration, speedup_factor
-        );
-
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: TTSKoko::SAMPLE_RATE,
-            bits_per_sample: 32,
-            sample_format: hound::SampleFormat::Float,
-        };
-
-        let mut writer = hound::WavWriter::create("tmp/output.wav", spec)?;
-
-        for &sample in &audio {
-            writer.write_sample(sample)?;
-        }
-
-        writer.finalize()?;
-
-        println!("Audio saved to tmp/output.wav");
-        Ok(())
     }
 
     pub fn load_voices(&mut self) {
@@ -202,11 +188,11 @@ impl TTSKoko {
                 }
             }
 
-            println!("voice styles loaded: {}", self.styles.len());
+            eprintln!("voice styles loaded: {}", self.styles.len());
             let mut keys: Vec<_> = self.styles.keys().cloned().collect();
             keys.sort();
-            println!("{:?}", keys);
-            println!(
+            eprintln!("{:?}", keys);
+            eprintln!(
                 "{:?} {:?}",
                 self.styles.keys().next(),
                 self.styles.keys().nth(1)
