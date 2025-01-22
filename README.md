@@ -1,12 +1,10 @@
 # Kokoro Rust
 
-
 ![img](https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg)
-
 
 https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420
 
-[Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface. 
+[Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface.
 This repo provides **insanely fast Kokoro infer in Rust**, you can now have your built TTS engine powered by Kokoro and infer fast by only a command of `koko`.
 
 `kokoros` is a `rust` crate that provides easy to use TTS ability.
@@ -16,23 +14,20 @@ One can directly call `koko` in terminal to synthesize audio.
 
 Languge support:
 
-- [x] English;
-- [x] Chinese (partly);
-- [x] Japanese (partly);
-- [x] German (partly);
-
+- [X] English;
+- [X] Chinese (partly);
+- [X] Japanese (partly);
+- [X] German (partly);
 
 > 🔥🔥🔥🔥🔥🔥🔥🔥🔥 Kokoros Rust version just got a lot attention now. If you also interested in insanely fast inference, embeded build, wasm support etc, please star this repo! We are keep updating it.
 
-
 > Currently help wanted! Implement OpenAI compatible API in Rust, anyone interested? Send me PR!
-
 
 New Discord community: https://discord.gg/nN4tCXC6, Please join us if you interested in Rust Kokoro.
 
-
 ## Updates
 
+- ***`2025.01.22`***: 🔥🔥🔥 **Streaming mode supported.** You can now using `--steam` to have fun with stream mode, kudos to [mroigo](https://github.com/mrorigo);
 - ***`2025.01.17`***: 🔥🔥🔥 Style mixing supported! Now, listen the output AMSR effect by simply specific style: `af_sky.4+af_nicole.5`;
 - ***`2025.01.15`***: OpenAI compatible server supported, openai format still under polish!
 - ***`2025.01.15`***: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
@@ -47,7 +42,7 @@ New Discord community: https://discord.gg/nN4tCXC6, Please join us if you intere
 python scripts/fetch_voices.py
 ```
 
-This step fetches the required `voices.json` data file, which is necessary for voice synthesis. 
+This step fetches the required `voices.json` data file, which is necessary for voice synthesis.
 
 2. Build the project:
 
@@ -71,6 +66,7 @@ For production use:
 ```
 
 The generated audio will be saved to:
+
 ```
 tmp/output.wav
 ```
@@ -86,6 +82,7 @@ cargo run -- --oai
 2. Make API requests using either curl or Python:
 
 Using curl:
+
 ```bash
 curl -X POST http://localhost:3000/v1/audio/speech \
   -H "Content-Type: application/json" \
@@ -97,6 +94,7 @@ curl -X POST http://localhost:3000/v1/audio/speech \
 ```
 
 Using Python:
+
 ```bash
 python scripts/run_openai.py
 ```
@@ -104,7 +102,6 @@ python scripts/run_openai.py
 ## Roadmap
 
 Due to Kokoro actually not finalizing it's ability, this repo will keep tracking the status of Kokoro, and helpfully we can have language support incuding: English, Mandarin, Japanese, German, French etc.
-
 
 ## Copyright
 
