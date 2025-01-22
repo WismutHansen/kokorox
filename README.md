@@ -4,6 +4,13 @@
 
 https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420
 
+🔥🔥🔥 **Introducing Kokoro Agents**
+
+https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567
+
+Give a star if you like it!
+
+
 [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface.
 This repo provides **insanely fast Kokoro infer in Rust**, you can now have your built TTS engine powered by Kokoro and infer fast by only a command of `koko`.
 

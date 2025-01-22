@@ -89,8 +89,8 @@ impl TTSKoko {
         txt: &str,
         lan: &str,
         style_name: &str,
+        save_path: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let output_path = "tmp/output.wav";
         let audio = self.tts_raw_audio(txt, lan, style_name)?;
 
         // Save to file
@@ -101,13 +101,13 @@ impl TTSKoko {
             sample_format: hound::SampleFormat::Float,
         };
 
-        let mut writer = hound::WavWriter::create(output_path, spec)?;
+        let mut writer = hound::WavWriter::create(save_path, spec)?;
         for &sample in &audio {
             writer.write_sample(sample)?;
         }
         writer.finalize()?;
 
-        eprintln!("Audio saved to {}", output_path);
+        eprintln!("Audio saved to {}", save_path);
         Ok(())
     }
 

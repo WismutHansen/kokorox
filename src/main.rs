@@ -3,7 +3,7 @@ mod serve;
 mod tts;
 mod utils;
 
-use std::io::Write;
+use std::{fs::{self, exists}, io::Write, path::Path};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use crate::utils::wav::{write_audio_chunk, WavHeader};
@@ -105,15 +105,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
             Ok(())
         } else {
-            let txt = args.text.unwrap_or_else(|| {
-                r#"
-                Hello, This is Kokoro, your remarkable AI TTS. It's a TTS model with merely 82 million parameters yet delivers incredible audio quality.
-This is one of the top notch Rust based inference models, and I'm sure you'll love it. If you do, please give us a star. Thank you very much.
- As the night falls, I wish you all a peaceful and restful sleep. May your dreams be filled with joy and happiness. Good night, and sweet dreams!
-                "#
-                .to_string()
-            });
-            let _ = tts.tts(&txt, &lan, &style);
+            let mut txt = args.text;
+            if txt.is_none() {
+                txt = Some(r#"
+                    Hello, This is Kokoro, your remarkable AI TTS. It's a TTS model with merely 82 million parameters yet delivers incredible audio quality.
+                    This is one of the top notch Rust based inference models, and I'm sure you'll love it. If you do, please give us a star. Thank you very much.
+                    As the night falls, I wish you all a peaceful and restful sleep. May your dreams be filled with joy and happiness. Good night, and sweet dreams!
+                "#.to_string());
+            }
+        
+            if let Some(txt_path) = &txt {
+                let path = Path::new(txt_path);
+                if path.exists() && path.is_file() {
+                    let file_content = fs::read_to_string(txt_path)?;
+                    for (i, line) in file_content.lines().enumerate() {
+                        let stripped_line = line.trim(); 
+                        if !stripped_line.is_empty() {
+                            let save_path = format!("tmp/output_{}.wav", i);
+                            tts.tts(stripped_line, &lan, &style, &save_path)?;
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+        
+            if let Some(text) = txt {
+                let save_path = "tmp/output.wav";
+                tts.tts(&text, &lan, &style, &save_path)?;
+            }
             Ok(())
         }
     })
