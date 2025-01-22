@@ -1,4 +1,5 @@
 use crate::tts::koko::TTSKoko;
+use crate::utils::wav::{write_audio_chunk, WavHeader};
 use axum::http::StatusCode;
 use axum::{extract::State, routing::post, Json, Router};
 use base64::Engine;
@@ -7,6 +8,7 @@ use tower_http::cors::CorsLayer;
 
 #[derive(Deserialize)]
 struct TTSRequest {
+    #[allow(dead_code)]
     model: String,
     input: String,
     voice: Option<String>,
@@ -35,9 +37,16 @@ async fn handle_tts(
     let return_audio = payload.return_audio.unwrap_or(false);
 
     match tts.tts_raw_audio(&payload.input, "en-us", &voice) {
-        Ok((audio_data, raw_audio)) => {
+        Ok(raw_audio) => {
             if return_audio {
-                let audio_base64 = base64::engine::general_purpose::STANDARD.encode(&audio_data);
+                let mut wav_data = Vec::new();
+                let header = WavHeader::new(1, TTSKoko::SAMPLE_RATE, 32);
+                header
+                    .write_header(&mut wav_data)
+                    .expect("Failed to write WAV header");
+                write_audio_chunk(&mut wav_data, &raw_audio).expect("Failed to write audio chunk");
+
+                let audio_base64 = base64::engine::general_purpose::STANDARD.encode(&wav_data);
                 Ok(Json(TTSResponse {
                     status: "success".to_string(),
                     file_path: None,

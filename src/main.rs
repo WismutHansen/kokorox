@@ -65,7 +65,7 @@ async fn handle_streaming_mode(
 
         // Process the line and get audio data
         match tts.tts_raw_audio(&line, lan, style) {
-            Ok((_, raw_audio)) => {
+            Ok(raw_audio) => {
                 // Write the raw audio samples directly
                 write_audio_chunk(&mut stdout, &raw_audio)?;
                 stdout.flush()?;

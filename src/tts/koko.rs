@@ -1,15 +1,9 @@
 use crate::tts::tokenize::tokenize;
-use crate::utils::wav::{write_audio_chunk, WavHeader};
 use std::collections::HashMap;
-use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::mpsc;
 
-use ndarray::{ArrayBase, IxDyn, OwnedRepr};
-
-use crate::onn::ort_base::OrtBase;
 use crate::onn::ort_koko::{self};
 use crate::utils;
 use crate::utils::fileio::load_json_file;
@@ -18,6 +12,7 @@ use espeak_rs::text_to_phonemes;
 
 #[derive(Clone)]
 pub struct TTSKoko {
+    #[allow(dead_code)]
     model_path: String,
     model: Arc<ort_koko::OrtKoko>,
     styles: HashMap<String, [[[f32; 256]; 1]; 511]>,
@@ -28,7 +23,7 @@ impl TTSKoko {
         "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.onnx";
     const JSON_DATA_F: &str = "data/voices.json";
 
-    const SAMPLE_RATE: u32 = 24000;
+    pub const SAMPLE_RATE: u32 = 24000;
 
     pub fn new(model_path: &str) -> Self {
         let p = Path::new(model_path);
@@ -61,7 +56,7 @@ impl TTSKoko {
         txt: &str,
         lan: &str,
         style_name: &str,
-    ) -> Result<(Vec<u8>, Vec<f32>), Box<dyn std::error::Error>> {
+    ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
         let phonemes = text_to_phonemes(txt, lan, None, true, false)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
             .join("");
@@ -74,14 +69,7 @@ impl TTSKoko {
             match result {
                 Ok(out) => {
                     let audio: Vec<f32> = out.iter().cloned().collect();
-
-                    // Create WAV data in memory (for compatibility with existing code)
-                    let mut wav_data = Vec::new();
-                    let header = WavHeader::new(1, Self::SAMPLE_RATE, 32);
-                    header.write_header(&mut wav_data)?;
-                    write_audio_chunk(&mut wav_data, &audio)?;
-
-                    Ok((wav_data, audio))
+                    Ok(audio)
                 }
                 Err(e) => {
                     eprintln!("An error occurred during inference: {:?}", e);
@@ -103,7 +91,7 @@ impl TTSKoko {
         style_name: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let output_path = "tmp/output.wav";
-        let (_, audio) = self.tts_raw_audio(txt, lan, style_name)?;
+        let audio = self.tts_raw_audio(txt, lan, style_name)?;
 
         // Save to file
         let spec = hound::WavSpec {
@@ -119,7 +107,7 @@ impl TTSKoko {
         }
         writer.finalize()?;
 
-        println!("Audio saved to {}", output_path);
+        eprintln!("Audio saved to {}", output_path);
         Ok(())
     }
 
@@ -135,7 +123,7 @@ impl TTSKoko {
                 Err(format!("can not found from styles_map: {}", style_name).into())
             }
         } else {
-            println!("parsing style mix");
+            eprintln!("parsing style mix");
             let styles: Vec<&str> = style_name.split('+').collect();
 
             let mut style_names = Vec::new();
@@ -149,7 +137,7 @@ impl TTSKoko {
                     }
                 }
             }
-            println!("styles: {:?}, portions: {:?}", style_names, style_portions);
+            eprintln!("styles: {:?}, portions: {:?}", style_names, style_portions);
 
             let mut blended_style = vec![vec![0.0; 256]; 1];
 

@@ -17,16 +17,16 @@ pub trait OrtBase {
 
     fn print_info(&self) {
         if let Some(session) = self.sess() {
-            println!("Input names:");
+            eprintln!("Input names:");
             for input in &session.inputs {
-                println!("  - {}", input.name);
+                eprintln!("  - {}", input.name);
             }
-            println!("Output names:");
+            eprintln!("Output names:");
             for output in &session.outputs {
-                println!("  - {}", output.name);
+                eprintln!("  - {}", output.name);
             }
         } else {
-            println!("Session is not initialized.");
+            eprintln!("Session is not initialized.");
         }
     }
 

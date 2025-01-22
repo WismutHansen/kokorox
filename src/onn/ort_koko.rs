@@ -44,7 +44,7 @@ impl OrtKoko {
         let tokens_value: SessionInputValue = SessionInputValue::Owned(Value::from(tokens));
 
         let shape_style = [styles.len(), styles[0].len()];
-        println!("shape_style: {:?}", shape_style);
+        eprintln!("shape_style: {:?}", shape_style);
         let style_flat: Vec<f32> = styles.into_iter().flatten().collect();
         let style = Tensor::from_array((shape_style, style_flat))?;
         let style_value: SessionInputValue = SessionInputValue::Owned(Value::from(style));
