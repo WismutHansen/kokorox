@@ -2,7 +2,6 @@ use crate::tts::tokenize::tokenize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Instant;
 
 use crate::onn::ort_koko::{self};
 use crate::utils;
@@ -51,37 +50,123 @@ impl TTSKoko {
         instance
     }
 
+    fn split_text_into_chunks(&self, text: &str, max_tokens: usize) -> Vec<String> {
+        let mut chunks = Vec::new();
+
+        // First split by sentences - using common sentence ending punctuation
+        let sentences: Vec<&str> = text
+            .split(|c| c == '.' || c == '?' || c == '!' || c == ';')
+            .filter(|s| !s.trim().is_empty())
+            .collect();
+
+        let mut current_chunk = String::new();
+
+        for sentence in sentences {
+            // Clean up the sentence and add back punctuation
+            let sentence = format!("{}.", sentence.trim());
+
+            // Convert to phonemes to check token count
+            let sentence_phonemes = text_to_phonemes(&sentence, "en", None, true, false)
+                .unwrap_or_default()
+                .join("");
+            let token_count = tokenize(&sentence_phonemes).len();
+
+            if token_count > max_tokens {
+                // If single sentence is too long, split by words
+                let words: Vec<&str> = sentence.split_whitespace().collect();
+                let mut word_chunk = String::new();
+
+                for word in words {
+                    let test_chunk = if word_chunk.is_empty() {
+                        word.to_string()
+                    } else {
+                        format!("{} {}", word_chunk, word)
+                    };
+
+                    let test_phonemes = text_to_phonemes(&test_chunk, "en", None, true, false)
+                        .unwrap_or_default()
+                        .join("");
+                    let test_tokens = tokenize(&test_phonemes).len();
+
+                    if test_tokens > max_tokens {
+                        if !word_chunk.is_empty() {
+                            chunks.push(word_chunk);
+                        }
+                        word_chunk = word.to_string();
+                    } else {
+                        word_chunk = test_chunk;
+                    }
+                }
+
+                if !word_chunk.is_empty() {
+                    chunks.push(word_chunk);
+                }
+            } else if !current_chunk.is_empty() {
+                // Try to append to current chunk
+                let test_text = format!("{} {}", current_chunk, sentence);
+                let test_phonemes = text_to_phonemes(&test_text, "en", None, true, false)
+                    .unwrap_or_default()
+                    .join("");
+                let test_tokens = tokenize(&test_phonemes).len();
+
+                if test_tokens > max_tokens {
+                    // If combining would exceed limit, start new chunk
+                    chunks.push(current_chunk);
+                    current_chunk = sentence;
+                } else {
+                    current_chunk = test_text;
+                }
+            } else {
+                current_chunk = sentence;
+            }
+        }
+
+        // Add the last chunk if not empty
+        if !current_chunk.is_empty() {
+            chunks.push(current_chunk);
+        }
+
+        chunks
+    }
+
     pub fn tts_raw_audio(
         &self,
         txt: &str,
         lan: &str,
         style_name: &str,
     ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
-        let phonemes = text_to_phonemes(txt, lan, None, true, false)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
-            .join("");
+        // Split text into appropriate chunks
+        let chunks = self.split_text_into_chunks(txt, 500); // Using 500 to leave 12 tokens of margin
+        let mut final_audio = Vec::new();
 
-        let tokens = vec![tokenize(&phonemes)];
+        // Get style vectors once
+        let styles = self.mix_styles(style_name)?;
 
-        if let Ok(styles) = self.mix_styles(style_name) {
-            let start_t = Instant::now();
-            let result = self.model.infer(tokens, styles);
-            match result {
-                Ok(out) => {
-                    let audio: Vec<f32> = out.iter().cloned().collect();
-                    Ok(audio)
+        for chunk in chunks {
+            // Convert chunk to phonemes
+            let phonemes = text_to_phonemes(&chunk, lan, None, true, false)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
+                .join("");
+
+            let tokens = vec![tokenize(&phonemes)];
+
+            match self.model.infer(tokens, styles.clone()) {
+                Ok(chunk_audio) => {
+                    let chunk_audio: Vec<f32> = chunk_audio.iter().cloned().collect();
+                    final_audio.extend_from_slice(&chunk_audio);
                 }
                 Err(e) => {
-                    eprintln!("An error occurred during inference: {:?}", e);
-                    Err(Box::new(std::io::Error::new(
+                    eprintln!("Error processing chunk: {:?}", e);
+                    eprintln!("Chunk text was: {:?}", chunk);
+                    return Err(Box::new(std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        "Inference failed",
-                    )))
+                        format!("Chunk processing failed: {:?}", e),
+                    )));
                 }
             }
-        } else {
-            Err(format!("{} failed to parse this style_name.", style_name).into())
         }
+
+        Ok(final_audio)
     }
 
     pub fn tts(
@@ -91,7 +176,7 @@ impl TTSKoko {
         style_name: &str,
         save_path: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let audio = self.tts_raw_audio(txt, lan, style_name)?;
+        let audio = self.tts_raw_audio(&txt, lan, style_name)?;
 
         // Save to file
         let spec = hound::WavSpec {
