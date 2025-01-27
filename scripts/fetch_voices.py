@@ -42,4 +42,4 @@ for voice in voices:
     voices_json[voice] = voice_data.tolist()
 
 with open("data/voices.json", "w") as f:
-    json.dump(voices_json, f, indent=4)
+    json.dump(voices_json, f, separators=(",", ":"))
