@@ -14,7 +14,7 @@ pub struct TTSKoko {
     #[allow(dead_code)]
     model_path: String,
     model: Arc<ort_koko::OrtKoko>,
-    styles: HashMap<String, [[[f32; 256]; 1]; 511]>,
+    styles: HashMap<String, Vec<[[f32; 256]; 1]>>,
 }
 
 impl TTSKoko {
@@ -247,8 +247,8 @@ impl TTSKoko {
                 for (key, value) in obj {
                     // Check if value is an array
                     if let Some(outer_array) = value.as_array() {
-                        // Define target multidimensional array
-                        let mut array_3d = [[[0.0; 256]; 1]; 511];
+                        // Define target multidimensional vec
+                        let mut tensor = vec![[[0.0; 256]; 1]; 511];
 
                         // Iterate through outer array (511 elements)
                         for (i, inner_value) in outer_array.iter().enumerate() {
@@ -259,7 +259,7 @@ impl TTSKoko {
                                         // Iterate through inner array (256 elements)
                                         for (k, number) in inner_array.iter().enumerate() {
                                             if let Some(num) = number.as_f64() {
-                                                array_3d[i][j][k] = num as f32;
+                                                tensor[i][j][k] = num as f32;
                                             }
                                         }
                                     }
@@ -268,7 +268,7 @@ impl TTSKoko {
                         }
 
                         // Insert multidimensional array into HashMap
-                        self.styles.insert(key.clone(), array_3d);
+                        self.styles.insert(key.clone(), tensor);
                     }
                 }
             }
