@@ -1,12 +1,18 @@
 <div align="center">
-  <img src="https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg" alt="Banner" style="max-height: 170px; width: auto;">
+  <img src="https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg" alt="Banner" style="max-height: 170px; max-width: 400px;">
 </div>
-
+<br>
 <h1 align="center">🔥🔥🔥 Kokoro Rust</h1>
 
-| AMSR | Digital Human |
-|--------|--------|
-| https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420 | https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567 |
+
+**AMSR**
+
+https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420
+
+
+**Digital Human**
+
+https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567
 
 
 <p align="center">
