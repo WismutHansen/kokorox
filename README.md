@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg" alt="Banner" style="max-height: 170px; max-width: 400px;">
+  <img src="https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg" alt="Banner" width="400" height="190">
 </div>
 <br>
 <h1 align="center">🔥🔥🔥 Kokoro Rust</h1>
