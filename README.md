@@ -1,14 +1,27 @@
-# Kokoro Rust
+<div align="center">
+  <img src="https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg" alt="Banner" style="max-height: 300px; width: auto;">
+</div>
 
-![img](https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg)
+<h1 align="center">🔥🔥🔥 Kokoro Rust</h1>
 
-https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420">
+        <img src="https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420" style="max-height: 400px; width: auto;">
+      </a>
+    </td>
+    <td align="center" width="50%">
+      <a href="https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567">
+        <img src="https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567" style="max-height: 400px; width: auto;">
+      </a>
+    </td>
+  </tr>
+</table>
 
-🔥🔥🔥 **Introducing Kokoro Agents**
-
-https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567
-
-Give a star if you like it!
+<p align="center">
+  <b>Give a star ⭐ if you like it!</b>
+</p>
 
 [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface.
 This repo provides **insanely fast Kokoro infer in Rust**, you can now have your built TTS engine powered by Kokoro and infer fast by only a command of `koko`.
