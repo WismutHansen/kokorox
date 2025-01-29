@@ -10,7 +10,6 @@ https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567
 
 Give a star if you like it!
 
-
 [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface.
 This repo provides **insanely fast Kokoro infer in Rust**, you can now have your built TTS engine powered by Kokoro and infer fast by only a command of `koko`.
 
@@ -21,10 +20,10 @@ One can directly call `koko` in terminal to synthesize audio.
 
 Languge support:
 
-- [X] English;
-- [X] Chinese (partly);
-- [X] Japanese (partly);
-- [X] German (partly);
+- [x] English;
+- [x] Chinese (partly);
+- [x] Japanese (partly);
+- [x] German (partly);
 
 > 🔥🔥🔥🔥🔥🔥🔥🔥🔥 Kokoros Rust version just got a lot attention now. If you also interested in insanely fast inference, embeded build, wasm support etc, please star this repo! We are keep updating it.
 
@@ -34,16 +33,22 @@ New Discord community: https://discord.gg/nN4tCXC6, Please join us if you intere
 
 ## Updates
 
-- ***`2025.01.22`***: 🔥🔥🔥 **Streaming mode supported.** You can now using `--stream` to have fun with stream mode, kudos to [mroigo](https://github.com/mrorigo);
-- ***`2025.01.17`***: 🔥🔥🔥 Style mixing supported! Now, listen the output AMSR effect by simply specific style: `af_sky.4+af_nicole.5`;
-- ***`2025.01.15`***: OpenAI compatible server supported, openai format still under polish!
-- ***`2025.01.15`***: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
-- ***`2025.01.13`***: Espeak-ng tokenizer and phonemizer supported! Kudos to [@mindreframer](https://github.com/mindreframer) ;
-- ***`2025.01.12`***: Released `Kokoros`;
+- **_`2025.01.22`_**: 🔥🔥🔥 **Streaming mode supported.** You can now using `--stream` to have fun with stream mode, kudos to [mroigo](https://github.com/mrorigo);
+- **_`2025.01.17`_**: 🔥🔥🔥 Style mixing supported! Now, listen the output AMSR effect by simply specific style: `af_sky.4+af_nicole.5`;
+- **_`2025.01.15`_**: OpenAI compatible server supported, openai format still under polish!
+- **_`2025.01.15`_**: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
+- **_`2025.01.13`_**: Espeak-ng tokenizer and phonemizer supported! Kudos to [@mindreframer](https://github.com/mindreframer) ;
+- **_`2025.01.12`_**: Released `Kokoros`;
 
 ## Installation
 
-1. Initialize voice data:
+1. Install required python packages
+
+```bash
+pip install torch numpy requests
+```
+
+2. Initialize voice data:
 
 ```bash
 python scripts/fetch_voices.py
@@ -51,7 +56,7 @@ python scripts/fetch_voices.py
 
 This step fetches the required `voices.json` data file, which is necessary for voice synthesis.
 
-2. Build the project:
+3. Build the project:
 
 ```bash
 cargo build --release
