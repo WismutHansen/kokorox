@@ -1,20 +1,17 @@
-use std::{
-    fs::File,
-    io::{Read, Write},
-    path::Path,
-};
-
 use indicatif::{ProgressBar, ProgressStyle};
-use reqwest::blocking::Client;
 use serde_json::Value;
+use std::{io::Read, path::Path};
+use tokio::{fs::File, io::AsyncWriteExt};
 
-pub fn download_file_from_url(url: &str, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn download_file_from_url(
+    url: &str,
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(parent) = Path::new(path).parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    let client = Client::new();
-    let mut resp = client.get(url).send()?;
+    let mut resp = reqwest::get(url).await?;
 
     if resp.status().is_success() {
         let total_size = resp.content_length().unwrap_or(0);
@@ -27,18 +24,13 @@ pub fn download_file_from_url(url: &str, path: &str) -> Result<(), Box<dyn std::
             .unwrap()
             .progress_chars("#>-"));
 
-        let mut file = File::create(path)?;
-        let mut buffer = [0; 8192]; // 8KB buffer
+        let mut file = File::create(path).await?;
         let mut downloaded = 0;
 
-        loop {
-            let bytes_read = resp.read(&mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-            file.write_all(&buffer[..bytes_read])?;
-            downloaded += bytes_read as u64;
-            pb.set_position(downloaded);
+        while let Some(chunk) = resp.chunk().await? {
+            file.write_all(&chunk).await?;
+            downloaded += chunk.len();
+            pb.set_position(downloaded.try_into()?);
         }
 
         pb.finish_with_message("Download completed");
@@ -49,7 +41,7 @@ pub fn download_file_from_url(url: &str, path: &str) -> Result<(), Box<dyn std::
 }
 
 pub fn load_json_file(path: &str) -> Result<Value, String> {
-    let file = File::open(path);
+    let file = std::fs::File::open(path);
     if file.is_err() {
         return Err(format!("failed to open file: {}", file.err().unwrap()));
     }

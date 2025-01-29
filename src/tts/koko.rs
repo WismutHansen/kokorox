@@ -24,10 +24,11 @@ impl TTSKoko {
 
     pub const SAMPLE_RATE: u32 = 24000;
 
-    pub fn new(model_path: &str) -> Self {
+    pub async fn new(model_path: &str) -> Self {
         let p = Path::new(model_path);
         if !p.exists() {
             utils::fileio::download_file_from_url(TTSKoko::MODEL_URL, model_path)
+                .await
                 .expect("download model failed.");
         } else {
             eprintln!("load model from: {}", model_path);
