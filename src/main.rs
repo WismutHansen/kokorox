@@ -3,8 +3,8 @@ mod serve;
 mod tts;
 mod utils;
 
-use std::{fs::{self, exists}, io::Write, path::Path};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use std::{fs::{self}, io::Write, path::Path};
+use tokio::io::{AsyncBufReadExt,  BufReader};
 
 use crate::utils::wav::{write_audio_chunk, WavHeader};
 use clap::Parser;
