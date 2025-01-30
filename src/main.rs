@@ -3,8 +3,8 @@ mod serve;
 mod tts;
 mod utils;
 
-use std::{fs::{self, exists}, io::Write, path::Path};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use std::{fs::{self}, io::Write, path::Path};
+use tokio::io::{AsyncBufReadExt,  BufReader};
 
 use crate::utils::wav::{write_audio_chunk, WavHeader};
 use clap::Parser;
@@ -89,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let style = args.style.unwrap_or_else(|| "af_sarah.4+af_nicole.6".to_string());
         let lan = args.lan.unwrap_or_else(|| { "en-us".to_string() });
 
-        let tts = TTSKoko::new(&model_path);
+        let tts = TTSKoko::new(&model_path).await;
 
         if args.stream {
             handle_streaming_mode(&tts, &lan, &style).await?;
