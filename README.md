@@ -4,16 +4,13 @@
 <br>
 <h1 align="center">🔥🔥🔥 Kokoro Rust</h1>
 
-
 **AMSR**
 
 https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420
 
-
 **Digital Human**
 
 https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567
-
 
 <p align="center">
   <b>Give a star ⭐ if you like it!</b>
@@ -118,6 +115,20 @@ Using Python:
 
 ```bash
 python scripts/run_openai.py
+```
+
+### With docker
+
+1. Build the image
+
+```bash
+docker build -t kokoros .
+```
+
+2. Run the image
+
+```bash
+docker run -p 3000:3000 -v ./tmp:/app/tmp kokoros
 ```
 
 ## Roadmap
