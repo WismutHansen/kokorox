@@ -28,9 +28,10 @@ voices = [
     "bm_lewis",
 ]
 voices_json = {}
+
 # pattern = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/{voice}.pt"
 # in case in China unable to access huggingface.co
-pattern = "https://hf-mirror.com/hexgrad/Kokoro-82M/resolve/main/voices/{voice}.pt"
+pattern = "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/voices/{voice}.pt"
 for voice in voices:
     url = pattern.format(voice=voice)
     print(f"Downloading {url}")
