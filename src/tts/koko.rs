@@ -181,7 +181,7 @@ impl TTSKoko {
 
         // Save to file
         let spec = hound::WavSpec {
-            channels: 1,
+            channels: 2,
             sample_rate: TTSKoko::SAMPLE_RATE,
             bits_per_sample: 32,
             sample_format: hound::SampleFormat::Float,
@@ -189,6 +189,7 @@ impl TTSKoko {
 
         let mut writer = hound::WavWriter::create(save_path, spec)?;
         for &sample in &audio {
+            writer.write_sample(sample)?;
             writer.write_sample(sample)?;
         }
         writer.finalize()?;
