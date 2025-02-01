@@ -35,7 +35,7 @@ Languge support:
 
 > Currently help wanted! Implement OpenAI compatible API in Rust, anyone interested? Send me PR!
 
-New Discord community: https://discord.gg/nN4tCXC6, Please join us if you interested in Rust Kokoro.
+New Discord community: https://discord.gg/E566zfDWqD, Please join us if you interested in Rust Kokoro.
 
 ## Updates
 
