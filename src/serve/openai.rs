@@ -36,7 +36,7 @@ async fn handle_tts(
     let voice = payload.voice.unwrap_or_else(|| "af_sky".to_string());
     let return_audio = payload.return_audio.unwrap_or(false);
 
-    match tts.tts_raw_audio(&payload.input, "en-us", &voice) {
+    match tts.tts_raw_audio(&payload.input, "en-us", &voice, None) {
         Ok(raw_audio) => {
             if return_audio {
                 let mut wav_data = Vec::new();

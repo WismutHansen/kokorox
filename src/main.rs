@@ -3,8 +3,8 @@ mod serve;
 mod tts;
 mod utils;
 
-use std::{fs::{self, exists}, io::Write, path::Path};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use std::{fs, io::Write, path::Path};
+use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::utils::wav::{write_audio_chunk, WavHeader};
 use clap::Parser;
@@ -38,11 +38,16 @@ struct Cli {
 
     #[arg(long = "stream", help = "Enable streaming mode")]
     stream: bool,
+
+    #[arg(long = "initial-silence", help = "Set initial silence, in tokens")]
+    initial_silence: Option<usize>,
 }
+
 async fn handle_streaming_mode(
     tts: &TTSKoko,
     lan: &str,
     style: &str,
+    initial_silence: Option<usize>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let stdin = tokio::io::stdin();
     let reader = BufReader::new(stdin);
@@ -51,9 +56,9 @@ async fn handle_streaming_mode(
     // Use std::io::stdout() for sync writing
     let mut stdout = std::io::stdout();
 
-    // Write WAV header first
     eprintln!("Entering streaming mode. Type text and press Enter. Use Ctrl+D to exit.");
 
+    // Write WAV header first
     let header = WavHeader::new(1, 24000, 32);
     header.write_header(&mut stdout)?;
     stdout.flush()?;
@@ -64,7 +69,7 @@ async fn handle_streaming_mode(
         }
 
         // Process the line and get audio data
-        match tts.tts_raw_audio(&line, lan, style) {
+        match tts.tts_raw_audio(&line, lan, style, initial_silence) {
             Ok(raw_audio) => {
                 // Write the raw audio samples directly
                 write_audio_chunk(&mut stdout, &raw_audio)?;
@@ -92,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tts = TTSKoko::new(&model_path);
 
         if args.stream {
-            handle_streaming_mode(&tts, &lan, &style).await?;
+            handle_streaming_mode(&tts, &lan, &style, args.initial_silence).await?;
             Ok(())
         } else if args.oai {
             let app = serve::openai::create_server(tts).await;
@@ -113,25 +118,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     As the night falls, I wish you all a peaceful and restful sleep. May your dreams be filled with joy and happiness. Good night, and sweet dreams!
                 "#.to_string());
             }
-        
+
             if let Some(txt_path) = &txt {
                 let path = Path::new(txt_path);
                 if path.exists() && path.is_file() {
                     let file_content = fs::read_to_string(txt_path)?;
                     for (i, line) in file_content.lines().enumerate() {
-                        let stripped_line = line.trim(); 
+                        let stripped_line = line.trim();
                         if !stripped_line.is_empty() {
                             let save_path = format!("tmp/output_{}.wav", i);
-                            tts.tts(stripped_line, &lan, &style, &save_path)?;
+                            tts.tts(stripped_line, &lan, &style, &save_path, args.initial_silence)?;
                         }
                     }
                     return Ok(());
                 }
             }
-        
+
             if let Some(text) = txt {
                 let save_path = "tmp/output.wav";
-                tts.tts(&text, &lan, &style, &save_path)?;
+                tts.tts(&text, &lan, &style, &save_path, args.initial_silence)?;
             }
             Ok(())
         }
