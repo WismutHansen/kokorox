@@ -1,0 +1,11 @@
+[package]
+name = "koko"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kokoros = { path = "../kokoros" }
+kokoros-openai = { path = "../kokoros-openai" }
+
+clap = { version = "4.5.26", features = ["derive"] }
+tokio = { version = "1.0", features = ["io-util"] }

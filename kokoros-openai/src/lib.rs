@@ -1,8 +1,10 @@
-use crate::tts::koko::TTSKoko;
-use crate::utils::wav::{write_audio_chunk, WavHeader};
 use axum::http::StatusCode;
 use axum::{extract::State, routing::post, Json, Router};
 use base64::Engine;
+use kokoros::{
+    tts::koko::TTSKoko,
+    utils::wav::{write_audio_chunk, WavHeader},
+};
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 
@@ -28,6 +30,8 @@ pub async fn create_server(tts: TTSKoko) -> Router {
         .layer(CorsLayer::permissive())
         .with_state(tts)
 }
+
+pub use axum::serve;
 
 async fn handle_tts(
     State(tts): State<TTSKoko>,
