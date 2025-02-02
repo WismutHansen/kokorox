@@ -9,6 +9,14 @@ use crate::utils::fileio::load_json_file;
 
 use espeak_rs::text_to_phonemes;
 
+pub struct TTSOpts<'a> {
+    pub txt: &'a str,
+    pub lan: &'a str,
+    pub style_name: &'a str,
+    pub save_path: &'a str,
+    pub mono: bool,
+}
+
 #[derive(Clone)]
 pub struct TTSKoko {
     #[allow(dead_code)]
@@ -172,27 +180,45 @@ impl TTSKoko {
 
     pub fn tts(
         &self,
-        txt: &str,
-        lan: &str,
-        style_name: &str,
-        save_path: &str,
+        TTSOpts {
+            txt,
+            lan,
+            style_name,
+            save_path,
+            mono,
+        }: TTSOpts,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let audio = self.tts_raw_audio(&txt, lan, style_name)?;
 
         // Save to file
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: TTSKoko::SAMPLE_RATE,
-            bits_per_sample: 32,
-            sample_format: hound::SampleFormat::Float,
-        };
+        if mono {
+            let spec = hound::WavSpec {
+                channels: 1,
+                sample_rate: TTSKoko::SAMPLE_RATE,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            };
 
-        let mut writer = hound::WavWriter::create(save_path, spec)?;
-        for &sample in &audio {
-            writer.write_sample(sample)?;
+            let mut writer = hound::WavWriter::create(save_path, spec)?;
+            for &sample in &audio {
+                writer.write_sample(sample)?;
+            }
+            writer.finalize()?;
+        } else {
+            let spec = hound::WavSpec {
+                channels: 2,
+                sample_rate: TTSKoko::SAMPLE_RATE,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            };
+
+            let mut writer = hound::WavWriter::create(save_path, spec)?;
+            for &sample in &audio {
+                writer.write_sample(sample)?;
+                writer.write_sample(sample)?;
+            }
+            writer.finalize()?;
         }
-        writer.finalize()?;
-
         eprintln!("Audio saved to {}", save_path);
         Ok(())
     }

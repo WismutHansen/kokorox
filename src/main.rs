@@ -9,7 +9,7 @@ use tokio::io::{AsyncBufReadExt,  BufReader};
 use crate::utils::wav::{write_audio_chunk, WavHeader};
 use clap::Parser;
 use std::net::SocketAddr;
-use tts::koko::TTSKoko;
+use tts::koko::{TTSKoko, TTSOpts};
 
 #[derive(Parser, Debug)]
 #[command(name = "kokoros")]
@@ -32,6 +32,9 @@ struct Cli {
 
     #[arg(short = 's', long = "style", value_name = "STYLE")]
     style: Option<String>,
+
+    #[arg(long = "mono", default_value_t=false)]
+    mono: bool,
 
     #[arg(long = "oai", value_name = "OpenAI server")]
     oai: bool,
@@ -88,6 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let model_path = args.model.unwrap_or_else(|| "checkpoints/kokoro-v0_19.onnx".to_string());
         let style = args.style.unwrap_or_else(|| "af_sarah.4+af_nicole.6".to_string());
         let lan = args.lan.unwrap_or_else(|| { "en-us".to_string() });
+        let mono = args.mono;
 
         let tts = TTSKoko::new(&model_path).await;
 
@@ -122,16 +126,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let stripped_line = line.trim(); 
                         if !stripped_line.is_empty() {
                             let save_path = format!("tmp/output_{}.wav", i);
-                            tts.tts(stripped_line, &lan, &style, &save_path)?;
+                            tts.tts(TTSOpts {
+                                txt: stripped_line,
+                                lan: &lan,
+                                style_name:&style,
+                                save_path: &save_path,
+                                mono,
+                            })?;
                         }
                     }
                     return Ok(());
                 }
             }
         
-            if let Some(text) = txt {
+            if let Some(ref text) = txt {
                 let save_path = "tmp/output.wav";
-                tts.tts(&text, &lan, &style, &save_path)?;
+                tts.tts(TTSOpts {
+                    txt: text,
+                    lan: &lan,
+                    style_name:&style,
+                    save_path: &save_path,
+                    mono,
+                })?;
             }
             Ok(())
         }
