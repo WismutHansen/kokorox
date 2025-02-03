@@ -33,6 +33,9 @@ struct Cli {
     #[arg(short = 's', long = "style", value_name = "STYLE")]
     style: Option<String>,
 
+    #[arg(short = 'p', long = "speed", value_name = "SPEED")]
+    speed: Option<f32>,
+
     #[arg(long = "mono", default_value_t = false)]
     mono: bool,
 
@@ -46,6 +49,7 @@ async fn handle_streaming_mode(
     tts: &TTSKoko,
     lan: &str,
     style: &str,
+    speed: f32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let stdin = tokio::io::stdin();
     let reader = BufReader::new(stdin);
@@ -67,7 +71,7 @@ async fn handle_streaming_mode(
         }
 
         // Process the line and get audio data
-        match tts.tts_raw_audio(&line, lan, style) {
+        match tts.tts_raw_audio(&line, lan, style, speed) {
             Ok(raw_audio) => {
                 // Write the raw audio samples directly
                 write_audio_chunk(&mut stdout, &raw_audio)?;
@@ -92,11 +96,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let style = args.style.unwrap_or_else(|| "af_sarah.4+af_nicole.6".to_string());
         let lan = args.lan.unwrap_or_else(|| { "en-us".to_string() });
         let mono = args.mono;
-
+        let speed = args.speed.unwrap_or(1.0);
         let tts = TTSKoko::new(&model_path).await;
 
         if args.stream {
-            handle_streaming_mode(&tts, &lan, &style).await?;
+            handle_streaming_mode(&tts, &lan, &style, speed).await?;
             Ok(())
         } else if args.oai {
             let app = kokoros_openai::create_server(tts).await;
@@ -132,6 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 style_name:&style,
                                 save_path: &save_path,
                                 mono,
+                                speed: speed,
                             })?;
                         }
                     }
@@ -147,6 +152,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     style_name:&style,
                     save_path: &save_path,
                     mono,
+                    speed: speed,
                 })?;
             }
             Ok(())
