@@ -1,15 +1,15 @@
-mod onn;
-mod serve;
-mod tts;
-mod utils;
-
-use std::{fs::{self}, io::Write, path::Path};
-use tokio::io::{AsyncBufReadExt,  BufReader};
-
-use crate::utils::wav::{write_audio_chunk, WavHeader};
 use clap::Parser;
+use kokoros::{
+    tts::koko::{TTSKoko, TTSOpts},
+    utils::wav::{write_audio_chunk, WavHeader},
+};
 use std::net::SocketAddr;
-use tts::koko::{TTSKoko, TTSOpts};
+use std::{
+    fs::{self},
+    io::Write,
+    path::Path,
+};
+use tokio::io::{AsyncBufReadExt, BufReader};
 
 #[derive(Parser, Debug)]
 #[command(name = "kokoros")]
@@ -33,7 +33,7 @@ struct Cli {
     #[arg(short = 's', long = "style", value_name = "STYLE")]
     style: Option<String>,
 
-    #[arg(long = "mono", default_value_t=false)]
+    #[arg(long = "mono", default_value_t = false)]
     mono: bool,
 
     #[arg(long = "oai", value_name = "OpenAI server")]
@@ -99,10 +99,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle_streaming_mode(&tts, &lan, &style).await?;
             Ok(())
         } else if args.oai {
-            let app = serve::openai::create_server(tts).await;
+            let app = kokoros_openai::create_server(tts).await;
             let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
             println!("Starting OpenAI-compatible server on http://localhost:3000");
-            axum::serve(
+            kokoros_openai::serve(
                 tokio::net::TcpListener::bind(&addr).await?,
                 app.into_make_service(),
             )
@@ -117,13 +117,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     As the night falls, I wish you all a peaceful and restful sleep. May your dreams be filled with joy and happiness. Good night, and sweet dreams!
                 "#.to_string());
             }
-        
+
             if let Some(txt_path) = &txt {
                 let path = Path::new(txt_path);
                 if path.exists() && path.is_file() {
                     let file_content = fs::read_to_string(txt_path)?;
                     for (i, line) in file_content.lines().enumerate() {
-                        let stripped_line = line.trim(); 
+                        let stripped_line = line.trim();
                         if !stripped_line.is_empty() {
                             let save_path = format!("tmp/output_{}.wav", i);
                             tts.tts(TTSOpts {
@@ -138,7 +138,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Ok(());
                 }
             }
-        
+
             if let Some(ref text) = txt {
                 let save_path = "tmp/output.wav";
                 tts.tts(TTSOpts {
