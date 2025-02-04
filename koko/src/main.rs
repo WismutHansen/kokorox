@@ -44,6 +44,9 @@ struct Cli {
 
     #[arg(long = "stream", help = "Enable streaming mode")]
     stream: bool,
+
+    #[arg(short = 'o', long = "output", value_name = "OUTPUT_PATH", help = "Output path for WAV file (default: tmp/output.wav)")]
+    output: Option<String>,
 }
 async fn handle_streaming_mode(
     tts: &TTSKoko,
@@ -89,14 +92,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     rt.block_on(async {
         let args = Cli::parse();
 
-        // if users use `af_sky.4+af_nicho.3` as style name
-        // then we blend it, with 0.4 af_sky + 0.3 af_nicho
+        // if users use `af_sky.4+af_nicole.3` as style name
+        // then we blend it, with 0.4*af_sky + 0.3*af_nicole
 
         let model_path = args.model.unwrap_or_else(|| "checkpoints/kokoro-v0_19.onnx".to_string());
         let style = args.style.unwrap_or_else(|| "af_sarah.4+af_nicole.6".to_string());
         let lan = args.lan.unwrap_or_else(|| { "en-us".to_string() });
         let mono = args.mono;
         let speed = args.speed.unwrap_or(1.0);
+        let save_path = args.output.unwrap_or_else(|| "tmp/output.wav".to_string());
         let tts = TTSKoko::new(&model_path).await;
 
         if args.stream {
@@ -129,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     for (i, line) in file_content.lines().enumerate() {
                         let stripped_line = line.trim();
                         if !stripped_line.is_empty() {
-                            let save_path = format!("tmp/output_{}.wav", i);
+                            let save_path = format!("{}_{i}.wav", save_path);
                             tts.tts(TTSOpts {
                                 txt: stripped_line,
                                 lan: &lan,
@@ -145,7 +149,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if let Some(ref text) = txt {
-                let save_path = "tmp/output.wav";
                 tts.tts(TTSOpts {
                     txt: text,
                     lan: &lan,
