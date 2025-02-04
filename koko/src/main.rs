@@ -133,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     for (i, line) in file_content.lines().enumerate() {
                         let stripped_line = line.trim();
                         if !stripped_line.is_empty() {
-                            let save_path = format!("{}_{i}.wav", save_path);
+                            let save_path = format!("{save_path}_{i}.wav");
                             tts.tts(TTSOpts {
                                 txt: stripped_line,
                                 lan: &lan,
