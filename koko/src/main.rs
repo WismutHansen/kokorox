@@ -16,25 +16,50 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 #[command(version = "0.1")]
 #[command(author = "Lucas Jin")]
 struct Cli {
-    #[arg(short = 't', long = "text", value_name = "TEXT")]
-    text: Option<String>,
+    #[arg(
+        short = 't',
+        long = "text",
+        value_name = "TEXT",
+        default_value = "Hello, This is Kokoro, your remarkable AI TTS. It's a TTS model with merely 82 million parameters yet delivers incredible audio quality.
+        This is one of the top notch Rust based inference models, and I'm sure you'll love it. If you do, please give us a star. Thank you very much.
+        As the night falls, I wish you all a peaceful and restful sleep. May your dreams be filled with joy and happiness. Good night, and sweet dreams!"
+    )]
+    text: String,
 
     #[arg(
         short = 'l',
         long = "lan",
         value_name = "LANGUAGE",
-        help = "https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md"
+        help = "https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md",
+        default_value = "en-us"
     )]
-    lan: Option<String>,
+    lan: String,
 
-    #[arg(short = 'm', long = "model", value_name = "MODEL")]
-    model: Option<String>,
+    #[arg(
+        short = 'm',
+        long = "model",
+        value_name = "MODEL",
+        default_value = "checkpoints/kokoro-v0_19.onnx"
+    )]
+    model_path: String,
 
-    #[arg(short = 's', long = "style", value_name = "STYLE")]
-    style: Option<String>,
+    #[arg(
+        short = 's',
+        long = "style",
+        value_name = "STYLE",
+        // if users use `af_sarah.4+af_nicole.6` as style name
+        // then we blend it, with 0.4*af_sarah + 0.6*af_nicole
+        default_value = "af_sarah.4+af_nicole.6"
+    )]
+    style: String,
 
-    #[arg(short = 'p', long = "speed", value_name = "SPEED")]
-    speed: Option<f32>,
+    #[arg(
+        short = 'p',
+        long = "speed",
+        value_name = "SPEED",
+        default_value_t = 1.0
+    )]
+    speed: f32,
 
     #[arg(long = "mono", default_value_t = false)]
     mono: bool,
@@ -45,9 +70,16 @@ struct Cli {
     #[arg(long = "stream", help = "Enable streaming mode")]
     stream: bool,
 
-    #[arg(short = 'o', long = "output", value_name = "OUTPUT_PATH", help = "Output path for WAV file (default: tmp/output.wav)")]
-    output: Option<String>,
+    #[arg(
+        short = 'o',
+        long = "output",
+        value_name = "OUTPUT_PATH",
+        help = "Output path for WAV file",
+        default_value = "tmp/output.wav"
+    )]
+    save_path: String,
 }
+
 async fn handle_streaming_mode(
     tts: &TTSKoko,
     lan: &str,
@@ -90,23 +122,24 @@ async fn handle_streaming_mode(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
-        let args = Cli::parse();
+        let Cli {
+            text,
+            lan,
+            model_path,
+            style,
+            speed,
+            mono,
+            oai,
+            stream,
+            save_path,
+        } = Cli::parse();
 
-        // if users use `af_sky.4+af_nicole.3` as style name
-        // then we blend it, with 0.4*af_sky + 0.3*af_nicole
-
-        let model_path = args.model.unwrap_or_else(|| "checkpoints/kokoro-v0_19.onnx".to_string());
-        let style = args.style.unwrap_or_else(|| "af_sarah.4+af_nicole.6".to_string());
-        let lan = args.lan.unwrap_or_else(|| { "en-us".to_string() });
-        let mono = args.mono;
-        let speed = args.speed.unwrap_or(1.0);
-        let save_path = args.output.unwrap_or_else(|| "tmp/output.wav".to_string());
         let tts = TTSKoko::new(&model_path).await;
 
-        if args.stream {
+        if stream {
             handle_streaming_mode(&tts, &lan, &style, speed).await?;
             Ok(())
-        } else if args.oai {
+        } else if oai {
             let app = kokoros_openai::create_server(tts).await;
             let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
             println!("Starting OpenAI-compatible server on http://localhost:3000");
@@ -117,47 +150,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
             Ok(())
         } else {
-            let mut txt = args.text;
-            if txt.is_none() {
-                txt = Some(r#"
-                    Hello, This is Kokoro, your remarkable AI TTS. It's a TTS model with merely 82 million parameters yet delivers incredible audio quality.
-                    This is one of the top notch Rust based inference models, and I'm sure you'll love it. If you do, please give us a star. Thank you very much.
-                    As the night falls, I wish you all a peaceful and restful sleep. May your dreams be filled with joy and happiness. Good night, and sweet dreams!
-                "#.to_string());
-            }
-
-            if let Some(txt_path) = &txt {
-                let path = Path::new(txt_path);
-                if path.exists() && path.is_file() {
-                    let file_content = fs::read_to_string(txt_path)?;
-                    for (i, line) in file_content.lines().enumerate() {
-                        let stripped_line = line.trim();
-                        if !stripped_line.is_empty() {
-                            let save_path = format!("{save_path}_{i}.wav");
-                            tts.tts(TTSOpts {
-                                txt: stripped_line,
-                                lan: &lan,
-                                style_name:&style,
-                                save_path: &save_path,
-                                mono,
-                                speed: speed,
-                            })?;
-                        }
+            let path = Path::new(&text);
+            if path.exists() && path.is_file() {
+                let file_content = fs::read_to_string(path)?;
+                for (i, line) in file_content.lines().enumerate() {
+                    let stripped_line = line.trim();
+                    if !stripped_line.is_empty() {
+                        let save_path = format!("{save_path}_{i}.wav");
+                        tts.tts(TTSOpts {
+                            txt: stripped_line,
+                            lan: &lan,
+                            style_name: &style,
+                            save_path: &save_path,
+                            mono,
+                            speed: speed,
+                        })?;
                     }
-                    return Ok(());
                 }
+                return Ok(());
             }
 
-            if let Some(ref text) = txt {
-                tts.tts(TTSOpts {
-                    txt: text,
-                    lan: &lan,
-                    style_name:&style,
-                    save_path: &save_path,
-                    mono,
-                    speed: speed,
-                })?;
-            }
+            tts.tts(TTSOpts {
+                txt: &text,
+                lan: &lan,
+                style_name: &style,
+                save_path: &save_path,
+                mono,
+                speed,
+            })?;
             Ok(())
         }
     })
