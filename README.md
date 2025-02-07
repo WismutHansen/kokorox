@@ -70,23 +70,34 @@ cargo build --release
 
 ## Usage
 
-Test the installation:
+### View available options
 
 ```bash
-cargo run
+./target/release/koko -h
 ```
 
-For production use:
-
-```bash
-./target/release/koko -h        # View available options
-./target/release/koko -t "Hello, this is a TTS test"
-```
-
-The generated audio will be saved to:
+### Generate speech for some text
 
 ```
-tmp/output.wav
+./target/release/koko text "Hello, this is a TTS test"
+```
+
+The generated audio will be saved to `tmp/output.wav` by default. You can customize the save location with the `--output` or `-o` option:
+
+```
+./target/release/koko text "I hope you're having a great day today!" --output greeting.wav
+```
+
+### Generate speech for each line in a file
+
+```
+./target/release/koko file poem.txt
+```
+
+For a file with 3 lines of text, by default, speech audio files `tmp/output_0.wav`, `tmp/output_1.wav`, `tmp/output_2.wav` will be outputted. You can customize the save location with the `--output` or `-o` option, using `{line}` as the line number:
+
+```
+./target/release/koko file lyrics.txt -o "song/lyric_{line}.wav"
 ```
 
 ### OpenAI-Compatible Server
@@ -94,7 +105,7 @@ tmp/output.wav
 1. Start the server:
 
 ```bash
-cargo run -- --oai
+./target/release/koko openai
 ```
 
 2. Make API requests using either curl or Python:
@@ -117,6 +128,27 @@ Using Python:
 python scripts/run_openai.py
 ```
 
+### Streaming
+
+The `stream` option will start the program, reading for lines of input from stdin and outputting WAV audio to stdout.
+
+Use it in conjunction with piping.
+
+#### Typing manually
+
+```
+./target/release/koko stream > live-audio.wav
+# Start typing some text to generate speech for and hit enter to submit
+# Speech will append to `live-audio.wav` as it is generated
+# Hit Ctrl D to exit
+```
+
+#### Input from another source
+
+```
+echo "Suppose some other program was outputting lines of text" | ./target/release/koko stream > programmatic-audio.wav
+```
+
 ### With docker
 
 1. Build the image
@@ -125,10 +157,14 @@ python scripts/run_openai.py
 docker build -t kokoros .
 ```
 
-2. Run the image
+2. Run the image, passing options as described above
 
 ```bash
-docker run -p 3000:3000 -v ./tmp:/app/tmp kokoros
+# Basic text to speech
+docker run -v ./tmp:/app/tmp kokoros text "Hello from docker!" -o tmp/hello.wav
+
+# An OpenAI server (with appropriately bound port)
+docker run -p 3000:3000 kokoros openai
 ```
 
 ## Roadmap
