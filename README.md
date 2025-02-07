@@ -33,8 +33,6 @@ Languge support:
 
 > 🔥🔥🔥🔥🔥🔥🔥🔥🔥 Kokoros Rust version just got a lot attention now. If you also interested in insanely fast inference, embeded build, wasm support etc, please star this repo! We are keep updating it.
 
-> Currently help wanted! Implement OpenAI compatible API in Rust, anyone interested? Send me PR!
-
 New Discord community: https://discord.gg/E566zfDWqD, Please join us if you interested in Rust Kokoro.
 
 ## Updates
@@ -48,10 +46,10 @@ New Discord community: https://discord.gg/E566zfDWqD, Please join us if you inte
 
 ## Installation
 
-1. Install required python packages
+1. Install required Python packages:
 
 ```bash
-pip install torch numpy requests
+pip install -r scripts/requirements.txt
 ```
 
 2. Initialize voice data:
@@ -116,7 +114,7 @@ Using curl:
 curl -X POST http://localhost:3000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "tts-1",
+    "model": "anything can go here",
     "input": "Hello, this is a test of the Kokoro TTS system!",
     "voice": "af_sky"
   }'

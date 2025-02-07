@@ -1,14 +1,13 @@
-from pathlib import Path
 from openai import OpenAI
 
-url = "http://localhost:3000/v1/audio/speech"
+base_url = "http://localhost:3000/v1"
 
+client = OpenAI(base_url=base_url, api_key="sfrhg453656")
 
-client = OpenAI(base_url=url, api_key="sfrhg453656")
-speech_file_path = "tmp/speech.mp3"
+speech_file_path = "tmp/speech.wav"
 response = client.audio.speech.create(
-    model="tts-1",
-    voice="alloy",
+    model="anything can go here",
+    voice="am_michael", # or voice=NotGiven(), (`from openai import NotGiven`) to use the server default
     input="Today is a wonderful day to build something people love!",
 )
 response.write_to_file(speech_file_path)
