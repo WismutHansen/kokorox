@@ -118,6 +118,7 @@ curl -X POST http://localhost:3000/v1/audio/speech \
     "input": "Hello, this is a test of the Kokoro TTS system!",
     "voice": "af_sky"
   }'
+  --output sky-says-hello.wav
 ```
 
 Using Python:
