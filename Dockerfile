@@ -15,7 +15,7 @@ RUN apt-get update -qq && apt-get install -qq -y pkg-config libssl-dev clang git
 
 WORKDIR /app
 
-COPY ./src ./src
+COPY . .
 COPY Cargo.toml .
 COPY Cargo.lock .
 
