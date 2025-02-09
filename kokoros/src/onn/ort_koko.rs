@@ -32,6 +32,7 @@ impl OrtKoko {
         &self,
         tokens: Vec<Vec<i64>>,
         styles: Vec<Vec<f32>>,
+        speed: f32,
     ) -> Result<ArrayBase<OwnedRepr<f32>, IxDyn>, Box<dyn std::error::Error>> {
         // inference koko
         // token, styles, speed
@@ -57,7 +58,7 @@ impl OrtKoko {
         let style = Tensor::from_array((shape_style, style_flat))?;
         let style_value: SessionInputValue = SessionInputValue::Owned(Value::from(style));
 
-        let speed = vec![1.0f32; 1];
+        let speed = vec![speed; 1];
         let speed = Tensor::from_array(([1], speed))?;
         let speed_value: SessionInputValue = SessionInputValue::Owned(Value::from(speed));
 

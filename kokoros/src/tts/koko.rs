@@ -9,6 +9,16 @@ use crate::utils::fileio::load_json_file;
 
 use espeak_rs::text_to_phonemes;
 
+pub struct TTSOpts<'a> {
+    pub txt: &'a str,
+    pub lan: &'a str,
+    pub style_name: &'a str,
+    pub save_path: &'a str,
+    pub mono: bool,
+    pub speed: f32,
+    pub initial_silence: Option<usize>,
+}
+
 #[derive(Clone)]
 pub struct TTSKoko {
     #[allow(dead_code)]
@@ -19,15 +29,16 @@ pub struct TTSKoko {
 
 impl TTSKoko {
     const MODEL_URL: &str =
-        "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.onnx";
+        "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/kokoro-v0_19.onnx";
     const JSON_DATA_F: &str = "data/voices.json";
 
     pub const SAMPLE_RATE: u32 = 24000;
 
-    pub fn new(model_path: &str) -> Self {
+    pub async fn new(model_path: &str) -> Self {
         let p = Path::new(model_path);
         if !p.exists() {
             utils::fileio::download_file_from_url(TTSKoko::MODEL_URL, model_path)
+                .await
                 .expect("download model failed.");
         } else {
             eprintln!("load model from: {}", model_path);
@@ -134,6 +145,7 @@ impl TTSKoko {
         txt: &str,
         lan: &str,
         style_name: &str,
+        speed: f32,
         initial_silence: Option<usize>,
     ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
         // Split text into appropriate chunks
@@ -155,7 +167,7 @@ impl TTSKoko {
             }
             let tokens = vec![tokens];
 
-            match self.model.infer(tokens, styles.clone()) {
+            match self.model.infer(tokens, styles.clone(), speed) {
                 Ok(chunk_audio) => {
                     let chunk_audio: Vec<f32> = chunk_audio.iter().cloned().collect();
                     final_audio.extend_from_slice(&chunk_audio);
@@ -176,28 +188,47 @@ impl TTSKoko {
 
     pub fn tts(
         &self,
-        txt: &str,
-        lan: &str,
-        style_name: &str,
-        save_path: &str,
-        initial_silence: Option<usize>,
+        TTSOpts {
+            txt,
+            lan,
+            style_name,
+            save_path,
+            mono,
+            speed,
+            initial_silence,
+        }: TTSOpts,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let audio = self.tts_raw_audio(&txt, lan, style_name, initial_silence)?;
+        let audio = self.tts_raw_audio(&txt, lan, style_name, speed, initial_silence)?;
 
         // Save to file
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: TTSKoko::SAMPLE_RATE,
-            bits_per_sample: 32,
-            sample_format: hound::SampleFormat::Float,
-        };
+        if mono {
+            let spec = hound::WavSpec {
+                channels: 1,
+                sample_rate: TTSKoko::SAMPLE_RATE,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            };
 
-        let mut writer = hound::WavWriter::create(save_path, spec)?;
-        for &sample in &audio {
-            writer.write_sample(sample)?;
+            let mut writer = hound::WavWriter::create(save_path, spec)?;
+            for &sample in &audio {
+                writer.write_sample(sample)?;
+            }
+            writer.finalize()?;
+        } else {
+            let spec = hound::WavSpec {
+                channels: 2,
+                sample_rate: TTSKoko::SAMPLE_RATE,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            };
+
+            let mut writer = hound::WavWriter::create(save_path, spec)?;
+            for &sample in &audio {
+                writer.write_sample(sample)?;
+                writer.write_sample(sample)?;
+            }
+            writer.finalize()?;
         }
-        writer.finalize()?;
-
         eprintln!("Audio saved to {}", save_path);
         Ok(())
     }
