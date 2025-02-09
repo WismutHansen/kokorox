@@ -116,6 +116,10 @@ struct Cli {
     #[arg(long = "mono", default_value_t = false)]
     mono: bool,
 
+    /// Initial silence duration in tokens
+    #[arg(long = "initial-silence", value_name = "INITIAL_SILENCE")]
+    initial_silence: Option<usize>,
+
     #[command(subcommand)]
     mode: Mode,
 }
@@ -128,6 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             model_path,
             style,
             speed,
+            initial_silence,
             mono,
             mode,
         } = Cli::parse();
@@ -153,7 +158,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         style_name: &style,
                         save_path: &save_path,
                         mono,
-                        speed: speed,
+                        speed,
+                        initial_silence,
                     })?;
                 }
             }
@@ -166,6 +172,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     save_path: &save_path,
                     mono,
                     speed,
+                    initial_silence,
                 })?;
             }
 
@@ -201,7 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     // Process the line and get audio data
-                    match tts.tts_raw_audio(&stripped_line, &lan, &style, speed) {
+                    match tts.tts_raw_audio(&stripped_line, &lan, &style, speed, initial_silence) {
                         Ok(raw_audio) => {
                             // Write the raw audio samples directly
                             write_audio_chunk(&mut stdout, &raw_audio)?;
