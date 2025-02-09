@@ -117,7 +117,7 @@ struct Cli {
     mono: bool,
 
     /// Initial silence duration in tokens
-    #[arg(long = "initial_silence", value_name = "INITIAL_SILENCE")]
+    #[arg(long = "initial-silence", value_name = "INITIAL_SILENCE")]
     initial_silence: Option<usize>,
 
     #[command(subcommand)]
