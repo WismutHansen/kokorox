@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{extract::State, routing::post, Json, Router};
 use kokoros::{
-    tts::koko::TTSKoko,
+    tts::koko::{InitConfig as TTSKokoInitConfig, TTSKoko},
     utils::wav::{write_audio_chunk, WavHeader},
 };
 use serde::Deserialize;
@@ -104,7 +104,8 @@ async fn handle_tts(
         .tts_raw_audio(&input, "en-us", &voice, speed, initial_silence)
         .map_err(SpeechError::Koko)?;
     let mut wav_data = Vec::default();
-    let header = WavHeader::new(1, TTSKoko::SAMPLE_RATE, 32);
+    let sample_rate = TTSKokoInitConfig::default().sample_rate;
+    let header = WavHeader::new(1, sample_rate, 32);
     header
         .write_header(&mut wav_data)
         .map_err(SpeechError::Header)?;
