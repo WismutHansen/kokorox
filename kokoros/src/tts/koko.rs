@@ -9,6 +9,7 @@ use crate::utils::fileio::load_json_file;
 
 use espeak_rs::text_to_phonemes;
 
+#[derive(Debug, Clone)]
 pub struct TTSOpts<'a> {
     pub txt: &'a str,
     pub lan: &'a str,
@@ -25,19 +26,36 @@ pub struct TTSKoko {
     model_path: String,
     model: Arc<ort_koko::OrtKoko>,
     styles: HashMap<String, Vec<[[f32; 256]; 1]>>,
+    init_config: InitConfig,
+}
+
+#[derive(Clone)]
+pub struct InitConfig {
+    pub model_url: String,
+    pub json_data_f: String,
+    pub sample_rate: u32,
+}
+
+impl Default for InitConfig {
+    fn default() -> Self {
+        Self {
+            model_url: "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/kokoro-v0_19.onnx".into(),
+            json_data_f: "data/voices.json".into(),
+            sample_rate: 24000,
+        }
+    }
 }
 
 impl TTSKoko {
-    const MODEL_URL: &str =
-        "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/kokoro-v0_19.onnx";
-    const JSON_DATA_F: &str = "data/voices.json";
+    pub async fn new (model_path: &str) -> Self {
+        Self::from_config(model_path, InitConfig::default()).await
+    }
 
-    pub const SAMPLE_RATE: u32 = 24000;
-
-    pub async fn new(model_path: &str) -> Self {
+    pub async fn from_config(model_path: &str, cfg: InitConfig) -> Self {
         let p = Path::new(model_path);
+        
         if !p.exists() {
-            utils::fileio::download_file_from_url(TTSKoko::MODEL_URL, model_path)
+            utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
                 .await
                 .expect("download model failed.");
         } else {
@@ -56,6 +74,7 @@ impl TTSKoko {
             model_path: model_path.to_string(),
             model,
             styles: HashMap::new(),
+            init_config: cfg,
         };
         instance.load_voices();
         instance
@@ -204,7 +223,7 @@ impl TTSKoko {
         if mono {
             let spec = hound::WavSpec {
                 channels: 1,
-                sample_rate: TTSKoko::SAMPLE_RATE,
+                sample_rate: self.init_config.sample_rate,
                 bits_per_sample: 32,
                 sample_format: hound::SampleFormat::Float,
             };
@@ -217,7 +236,7 @@ impl TTSKoko {
         } else {
             let spec = hound::WavSpec {
                 channels: 2,
-                sample_rate: TTSKoko::SAMPLE_RATE,
+                sample_rate: self.init_config.sample_rate,
                 bits_per_sample: 32,
                 sample_format: hound::SampleFormat::Float,
             };
@@ -278,7 +297,7 @@ impl TTSKoko {
 
     pub fn load_voices(&mut self) {
         // load from json, get styles
-        let values = load_json_file(TTSKoko::JSON_DATA_F);
+        let values = load_json_file(self.init_config.json_data_f.as_str());
         if let Ok(values) = values {
             if let Some(obj) = values.as_object() {
                 for (key, value) in obj {
