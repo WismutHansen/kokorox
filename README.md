@@ -4,6 +4,8 @@
 <br>
 <h1 align="center">🔥🔥🔥 Kokoro Rust</h1>
 
+## [Zonos Rust Is On The Way?](https://github.com/lucasjinreal/Kokoros/issues/60)
+
 **AMSR**
 
 https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420
