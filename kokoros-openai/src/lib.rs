@@ -3,7 +3,7 @@ use std::io;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{extract::State, routing::get, routing::post, Json, Router};
 use kokoros::{
     tts::koko::{InitConfig as TTSKokoInitConfig, TTSKoko},
     utils::wav::{write_audio_chunk, WavHeader},
@@ -62,6 +62,7 @@ struct SpeechRequest {
 pub async fn create_server(tts: TTSKoko) -> Router {
     Router::new()
         .route("/v1/audio/speech", post(handle_tts))
+        .route("/v1/health", get(handle_health))
         .layer(CorsLayer::permissive())
         .with_state(tts)
 }
@@ -112,4 +113,8 @@ async fn handle_tts(
     write_audio_chunk(&mut wav_data, &raw_audio).map_err(SpeechError::Chunk)?;
 
     Ok(wav_data)
+}
+
+async fn handle_health() -> &'static str {
+    "OK"
 }
