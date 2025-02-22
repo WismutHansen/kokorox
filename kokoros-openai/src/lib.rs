@@ -61,8 +61,8 @@ struct SpeechRequest {
 
 pub async fn create_server(tts: TTSKoko) -> Router {
     Router::new()
+        .route("/", get(handle_home))
         .route("/v1/audio/speech", post(handle_tts))
-        .route("/v1/health", get(handle_health))
         .layer(CorsLayer::permissive())
         .with_state(tts)
 }
@@ -90,6 +90,12 @@ impl IntoResponse for SpeechError {
     }
 }
 
+/// Returns a 200 OK response to make it easier to check if the server is
+/// running.
+async fn handle_home() -> &'static str {
+    "OK"
+}
+
 async fn handle_tts(
     State(tts): State<TTSKoko>,
     Json(SpeechRequest {
@@ -113,8 +119,4 @@ async fn handle_tts(
     write_audio_chunk(&mut wav_data, &raw_audio).map_err(SpeechError::Chunk)?;
 
     Ok(wav_data)
-}
-
-async fn handle_health() -> &'static str {
-    "OK"
 }
