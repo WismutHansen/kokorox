@@ -3,7 +3,7 @@ use std::io;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{extract::State, routing::get, routing::post, Json, Router};
 use kokoros::{
     tts::koko::{InitConfig as TTSKokoInitConfig, TTSKoko},
     utils::wav::{write_audio_chunk, WavHeader},
@@ -61,6 +61,7 @@ struct SpeechRequest {
 
 pub async fn create_server(tts: TTSKoko) -> Router {
     Router::new()
+        .route("/", get(handle_home))
         .route("/v1/audio/speech", post(handle_tts))
         .layer(CorsLayer::permissive())
         .with_state(tts)
@@ -87,6 +88,12 @@ impl IntoResponse for SpeechError {
         // None of these errors make sense to expose to the user of the API
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
+}
+
+/// Returns a 200 OK response to make it easier to check if the server is
+/// running.
+async fn handle_home() -> &'static str {
+    "OK"
 }
 
 async fn handle_tts(
