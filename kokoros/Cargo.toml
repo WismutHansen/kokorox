@@ -13,12 +13,13 @@ regex = "1.9.5"
 reqwest = { version = "0.12.12" }
 serde_json = "1.0.135"
 tokio = { version = "1.0", features = ["fs", "io-util"] }
+ndarray-npy = "0.9.1"
 
 # ONNX Runtime dependencies
-ort = { version = "2.0.0-rc.4", default-features = false }
+ort = { version = "2.0.0-rc.9", default-features = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-ort = { version = "2.0.0-rc.4", features = ["coreml"] }
+ort = { version = "2.0.0-rc.9", features = ["coreml"] }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-ort = { version = "2.0.0-rc.4", features = [] }
+ort = { version = "2.0.0-rc.9", features = [] }

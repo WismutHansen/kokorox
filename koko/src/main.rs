@@ -86,7 +86,7 @@ struct Cli {
         short = 'm',
         long = "model",
         value_name = "MODEL_PATH",
-        default_value = "checkpoints/kokoro-v0_19.onnx"
+        default_value = "checkpoints/kokoro-v1.0.onnx"
     )]
     model_path: String,
 
@@ -165,6 +165,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             Mode::Text { text, save_path } => {
+                let s = std::time::Instant::now();
                 tts.tts(TTSOpts {
                     txt: &text,
                     lan: &lan,
@@ -174,6 +175,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     speed,
                     initial_silence,
                 })?;
+                println!("Time taken: {:?}", s.elapsed());
+                let words_per_second = text.split_whitespace().count() as f32 / s.elapsed().as_secs_f32();
+                println!("Words per second: {:.2}", words_per_second);
             }
 
             Mode::OpenAI { ip, port } => {

@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use crate::onn::ort_koko::{self};
 use crate::utils;
-use crate::utils::fileio::load_json_file;
+use ndarray::Array3;
+use ndarray_npy::NpzReader;
+use std::fs::File;
 
 use espeak_rs::text_to_phonemes;
 
@@ -39,8 +41,8 @@ pub struct InitConfig {
 impl Default for InitConfig {
     fn default() -> Self {
         Self {
-            model_url: "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/kokoro-v0_19.onnx".into(),
-            json_data_f: "data/voices.json".into(),
+            model_url: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx".into(),
+            json_data_f: "data/voices-v1.0.bin".into(),
             sample_rate: 24000,
         }
     }
@@ -171,9 +173,6 @@ impl TTSKoko {
         let chunks = self.split_text_into_chunks(txt, 500); // Using 500 to leave 12 tokens of margin
         let mut final_audio = Vec::new();
 
-        // Get style vectors once
-        let styles = self.mix_styles(style_name)?;
-
         for chunk in chunks {
             // Convert chunk to phonemes
             let phonemes = text_to_phonemes(&chunk, lan, None, true, false)
@@ -181,10 +180,22 @@ impl TTSKoko {
                 .join("");
 
             let mut tokens = tokenize(&phonemes);
+            
             for _ in 0..initial_silence.unwrap_or(0) {
                 tokens.insert(0, 30);
             }
-            let tokens = vec![tokens];
+
+            // Get style vectors once
+            let styles = self.mix_styles(style_name, tokens.len())?;
+
+            // pad a 0 to start and end of tokens
+            let mut padded_tokens = vec![0];
+            for &token in &tokens {
+                padded_tokens.push(token);
+            }
+            padded_tokens.push(0);
+
+            let tokens = vec![padded_tokens];
 
             match self.model.infer(tokens, styles.clone(), speed) {
                 Ok(chunk_audio) => {
@@ -255,10 +266,11 @@ impl TTSKoko {
     pub fn mix_styles(
         &self,
         style_name: &str,
+        tokens_len: usize,
     ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
         if !style_name.contains("+") {
             if let Some(style) = self.styles.get(style_name) {
-                let styles = vec![style[0][0].to_vec()];
+                let styles = vec![style[tokens_len][0].to_vec()];
                 Ok(styles)
             } else {
                 Err(format!("can not found from styles_map: {}", style_name).into())
@@ -284,7 +296,7 @@ impl TTSKoko {
 
             for (name, portion) in style_names.iter().zip(style_portions.iter()) {
                 if let Some(style) = self.styles.get(*name) {
-                    let style_slice = &style[0][0]; // This is a [256] array
+                    let style_slice = &style[tokens_len][0]; // This is a [256] array
                                                     // Blend into the blended_style
                     for j in 0..256 {
                         blended_style[0][j] += style_slice[j] * portion;
@@ -296,48 +308,20 @@ impl TTSKoko {
     }
 
     pub fn load_voices(&mut self) {
-        // load from json, get styles
-        let values = load_json_file(self.init_config.json_data_f.as_str());
-        if let Ok(values) = values {
-            if let Some(obj) = values.as_object() {
-                for (key, value) in obj {
-                    // Check if value is an array
-                    if let Some(outer_array) = value.as_array() {
-                        // Define target multidimensional vec
-                        let mut tensor = vec![[[0.0; 256]; 1]; 511];
 
-                        // Iterate through outer array (511 elements)
-                        for (i, inner_value) in outer_array.iter().enumerate() {
-                            if let Some(middle_array) = inner_value.as_array() {
-                                // Iterate through middle array (1 element)
-                                for (j, inner_inner_value) in middle_array.iter().enumerate() {
-                                    if let Some(inner_array) = inner_inner_value.as_array() {
-                                        // Iterate through inner array (256 elements)
-                                        for (k, number) in inner_array.iter().enumerate() {
-                                            if let Some(num) = number.as_f64() {
-                                                tensor[i][j][k] = num as f32;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Insert multidimensional array into HashMap
-                        self.styles.insert(key.clone(), tensor);
+        let mut npz = NpzReader::new(File::open(self.init_config.json_data_f.as_str()).unwrap()).unwrap();
+        for voice in npz.names().unwrap() {
+            let voice_data: Result<Array3<f32>, _> = npz.by_name(&voice);
+            let voice_data = voice_data.unwrap();
+            let mut tensor = vec![[[0.0; 256]; 1]; 511];
+            for (i, inner_value) in voice_data.outer_iter().enumerate() {
+                for (j, inner_inner_value) in inner_value.outer_iter().enumerate() {
+                    for (k, number) in inner_inner_value.iter().enumerate() {
+                        tensor[i][j][k] = *number;
                     }
                 }
             }
-
-            eprintln!("voice styles loaded: {}", self.styles.len());
-            let mut keys: Vec<_> = self.styles.keys().cloned().collect();
-            keys.sort();
-            eprintln!("{:?}", keys);
-            eprintln!(
-                "{:?} {:?}",
-                self.styles.keys().next(),
-                self.styles.keys().nth(1)
-            );
+            self.styles.insert(voice, tensor);
         }
     }
 }
