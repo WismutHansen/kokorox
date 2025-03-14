@@ -308,7 +308,6 @@ impl TTSKoko {
     }
 
     pub fn load_voices(&mut self) {
-
         let mut npz = NpzReader::new(File::open(self.init_config.json_data_f.as_str()).unwrap()).unwrap();
         for voice in npz.names().unwrap() {
             let voice_data: Result<Array3<f32>, _> = npz.by_name(&voice);
@@ -323,5 +322,12 @@ impl TTSKoko {
             }
             self.styles.insert(voice, tensor);
         }
+
+        let sorted_voices = {
+            let mut voices = self.styles.keys().collect::<Vec<_>>();
+            voices.sort();
+            voices
+        };
+        println!("voice styles loaded: {:?}", sorted_voices);
     }
 }

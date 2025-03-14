@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Set variables
-VOICES_JSON_SRC="data/voices.json"
-VOICES_JSON_DEST="$HOME/.cache/kokoros/data.voices.json"
+VOICES_JSON_SRC="data/voices-v1.0.bin"
+VOICES_JSON_DEST="$HOME/.cache/kokoros/data.voices-v1.0.bin"
 KOKO_BIN_SRC="target/release/koko"
 KOKO_BIN_DEST="/usr/local/bin/koko"
 
@@ -12,7 +12,7 @@ if [ ! -d "$(dirname "$VOICES_JSON_DEST")" ]; then
     mkdir -p "$(dirname "$VOICES_JSON_DEST")"
 fi
 
-# Copy voices.json to the cache directory
+# Copy voices to the cache directory
 if [ -f "$VOICES_JSON_SRC" ]; then
     echo "Copying $VOICES_JSON_SRC to $VOICES_JSON_DEST"
     cp "$VOICES_JSON_SRC" "$VOICES_JSON_DEST"
