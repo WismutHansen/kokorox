@@ -4,3 +4,4 @@ vendor/
 *.DS_store
 .venv
 venv/
+.vscode/
