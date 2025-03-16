@@ -7,7 +7,7 @@ use crate::onn::ort_koko::{self};
 use crate::utils;
 use ndarray::Array3;
 use ndarray_npy::NpzReader;
-use std::fs::File;
+use std::fs::{self, File};
 
 use espeak_rs::text_to_phonemes;
 
@@ -34,7 +34,8 @@ pub struct TTSKoko {
 #[derive(Clone)]
 pub struct InitConfig {
     pub model_url: String,
-    pub json_data_f: String,
+    pub voices_url: String,
+    pub voices_path: String,
     pub sample_rate: u32,
 }
 
@@ -42,14 +43,15 @@ impl Default for InitConfig {
     fn default() -> Self {
         Self {
             model_url: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx".into(),
-            json_data_f: "data/voices-v1.0.bin".into(),
+            voices_url: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin".into(),
+            voices_path: "data/voices-v1.0.bin".into(),
             sample_rate: 24000,
         }
     }
 }
 
 impl TTSKoko {
-    pub async fn new (model_path: &str) -> Self {
+    pub async fn new(model_path: &str) -> Self {
         Self::from_config(model_path, InitConfig::default()).await
     }
 
@@ -78,8 +80,31 @@ impl TTSKoko {
             styles: HashMap::new(),
             init_config: cfg,
         };
+
+        instance.download_voices().await;
         instance.load_voices();
         instance
+    }
+
+    pub async fn download_voices(&self) {
+        let voices_path = Path::new(&self.init_config.voices_path);
+        let voices_dir = voices_path.parent().expect("Failed to get parent directory");
+
+        if !voices_dir.exists() {
+            fs::create_dir_all(voices_dir).expect("Failed to create data directory");
+        }
+
+        if !voices_path.exists() {
+            eprintln!("Downloading voices file to: {}", self.init_config.voices_path);
+            utils::fileio::download_file_from_url(
+                &self.init_config.voices_url,
+                &self.init_config.voices_path,
+            )
+            .await
+            .expect("Failed to download voices file");
+        } else {
+            eprintln!("Voices file already exists at: {}", self.init_config.voices_path);
+        }
     }
 
     fn split_text_into_chunks(&self, text: &str, max_tokens: usize) -> Vec<String> {
@@ -308,7 +333,7 @@ impl TTSKoko {
     }
 
     pub fn load_voices(&mut self) {
-        let mut npz = NpzReader::new(File::open(self.init_config.json_data_f.as_str()).unwrap()).unwrap();
+        let mut npz = NpzReader::new(File::open(self.init_config.voices_path.as_str()).unwrap()).unwrap();
         for voice in npz.names().unwrap() {
             let voice_data: Result<Array3<f32>, _> = npz.by_name(&voice);
             let voice_data = voice_data.unwrap();
