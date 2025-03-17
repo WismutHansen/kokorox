@@ -1,15 +1,13 @@
 use std::error::Error;
-use std::fs::File;
-use std::io::{self, Write};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::io::{self};
 
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{extract::State, routing::get, routing::post, Json, Router};
 use kokoros::{
     tts::koko::{InitConfig as TTSKokoInitConfig, TTSKoko},
-    utils::wav::{write_audio_chunk, WavHeader},
     utils::mp3::pcm_to_mp3,
+    utils::wav::{write_audio_chunk, WavHeader},
 };
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
@@ -65,7 +63,7 @@ struct SpeechRequest {
 
 pub async fn create_server(tts: TTSKoko) -> Router {
     println!("create_server()");
-    
+
     Router::new()
         .route("/", get(handle_home))
         .route("/v1/audio/speech", post(handle_tts))
@@ -116,17 +114,11 @@ async fn handle_tts(
         initial_silence,
     }): Json<SpeechRequest>,
 ) -> Result<Response, SpeechError> {
-    
     let raw_audio = tts
         .tts_raw_audio(&input, "en-us", &voice, speed, initial_silence)
         .map_err(SpeechError::Koko)?;
 
     let sample_rate = TTSKokoInitConfig::default().sample_rate;
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
 
     let (content_type, audio_data) = match response_format {
         AudioFormat::Wav => {
@@ -154,4 +146,3 @@ async fn handle_tts(
             SpeechError::Mp3Conversion(std::io::Error::new(std::io::ErrorKind::Other, e))
         })?)
 }
-

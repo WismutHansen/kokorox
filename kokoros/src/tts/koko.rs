@@ -1,13 +1,12 @@
 use crate::tts::tokenize::tokenize;
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use crate::onn::ort_koko::{self};
 use crate::utils;
 use ndarray::Array3;
 use ndarray_npy::NpzReader;
-use std::fs::{self, File};
+use std::fs::File;
 
 use espeak_rs::text_to_phonemes;
 
@@ -35,7 +34,6 @@ pub struct TTSKoko {
 pub struct InitConfig {
     pub model_url: String,
     pub voices_url: String,
-    pub voices_path: String,
     pub sample_rate: u32,
 }
 
@@ -44,36 +42,24 @@ impl Default for InitConfig {
         Self {
             model_url: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx".into(),
             voices_url: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin".into(),
-            voices_path: "data/voices-v1.0.bin".into(),
             sample_rate: 24000,
         }
     }
 }
 
 impl TTSKoko {
-    pub async fn new(model_path: &str) -> Self {
-        Self::from_config(model_path, InitConfig::default()).await
+    pub async fn new(model_path: &str, voices_path: &str) -> Self {
+        Self::from_config(model_path, voices_path, InitConfig::default()).await
     }
 
-    pub async fn from_config(model_path: &str, cfg: InitConfig) -> Self {
-        let model_p = Path::new(model_path);
-        
-        if !model_p.exists() {
-            utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
-                .await
-                .expect("download model failed.");
-        } else {
-            eprintln!("load model from: {}", model_path);
-        }
+    pub async fn from_config(model_path: &str, voices_path: &str, cfg: InitConfig) -> Self {
+        utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
+            .await
+            .expect("download model failed.");
 
-        let json_data_p = Path::new(&cfg.voices_data_f);
-        if !json_data_p.exists() {
-            utils::fileio::download_file_from_url(cfg.voices_data_f_url.as_str(), json_data_p.to_str().unwrap_or(""))
-                .await
-                .expect("download voices data file failed.");
-        } else {
-            eprintln!("load voices data file from: {}", cfg.voices_data_f);
-        }
+        utils::fileio::download_file_from_url(cfg.voices_url.as_str(), voices_path)
+            .await
+            .expect("download voices data file failed.");
 
         let model = Arc::new(
             ort_koko::OrtKoko::new(model_path.to_string())
@@ -83,36 +69,13 @@ impl TTSKoko {
         // TODO: if(not streaming) { model.print_info(); }
         // model.print_info();
 
-        let mut instance = TTSKoko {
+        let styles = Self::load_voices(voices_path);
+
+        TTSKoko {
             model_path: model_path.to_string(),
             model,
-            styles: HashMap::new(),
+            styles,
             init_config: cfg,
-        };
-
-        instance.download_voices().await;
-        instance.load_voices();
-        instance
-    }
-
-    pub async fn download_voices(&self) {
-        let voices_path = Path::new(&self.init_config.voices_path);
-        let voices_dir = voices_path.parent().expect("Failed to get parent directory");
-
-        if !voices_dir.exists() {
-            fs::create_dir_all(voices_dir).expect("Failed to create data directory");
-        }
-
-        if !voices_path.exists() {
-            eprintln!("Downloading voices file to: {}", self.init_config.voices_path);
-            utils::fileio::download_file_from_url(
-                &self.init_config.voices_url,
-                &self.init_config.voices_path,
-            )
-            .await
-            .expect("Failed to download voices file");
-        } else {
-            eprintln!("Voices file already exists at: {}", self.init_config.voices_path);
         }
     }
 
@@ -214,7 +177,7 @@ impl TTSKoko {
                 .join("");
 
             let mut tokens = tokenize(&phonemes);
-            
+
             for _ in 0..initial_silence.unwrap_or(0) {
                 tokens.insert(0, 30);
             }
@@ -331,7 +294,7 @@ impl TTSKoko {
             for (name, portion) in style_names.iter().zip(style_portions.iter()) {
                 if let Some(style) = self.styles.get(*name) {
                     let style_slice = &style[tokens_len][0]; // This is a [256] array
-                                                    // Blend into the blended_style
+                                                             // Blend into the blended_style
                     for j in 0..256 {
                         blended_style[0][j] += style_slice[j] * portion;
                     }
@@ -341,8 +304,9 @@ impl TTSKoko {
         }
     }
 
-    pub fn load_voices(&mut self) {
-        let mut npz = NpzReader::new(File::open(self.init_config.voices_path.as_str()).unwrap()).unwrap();
+    fn load_voices(voices_path: &str) -> HashMap<String, Vec<[[f32; 256]; 1]>> {
+        let mut npz = NpzReader::new(File::open(voices_path).unwrap()).unwrap();
+        let mut map = HashMap::new();
 
         for voice in npz.names().unwrap() {
             let voice_data: Result<Array3<f32>, _> = npz.by_name(&voice);
@@ -355,14 +319,16 @@ impl TTSKoko {
                     }
                 }
             }
-            self.styles.insert(voice, tensor);
+            map.insert(voice, tensor);
         }
 
         let sorted_voices = {
-            let mut voices = self.styles.keys().collect::<Vec<_>>();
+            let mut voices = map.keys().collect::<Vec<_>>();
             voices.sort();
             voices
         };
+
         println!("voice styles loaded: {:?}", sorted_voices);
+        map
     }
 }

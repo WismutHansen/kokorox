@@ -89,7 +89,7 @@ struct Cli {
         default_value = "checkpoints/kokoro-v1.0.onnx"
     )]
     model_path: String,
-    
+
     /// Path to the voices data file on the filesystem
     #[arg(
         short = 'd',
@@ -186,7 +186,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     initial_silence,
                 })?;
                 println!("Time taken: {:?}", s.elapsed());
-                let words_per_second = text.split_whitespace().count() as f32 / s.elapsed().as_secs_f32();
+                let words_per_second =
+                    text.split_whitespace().count() as f32 / s.elapsed().as_secs_f32();
                 println!("Words per second: {:.2}", words_per_second);
             }
 
