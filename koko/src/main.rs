@@ -81,7 +81,7 @@ struct Cli {
     )]
     lan: String,
 
-    /// Path to the Kokoro v0.19 ONNX model on the filesystem
+    /// Path to the Kokoro v1.0 ONNX model on the filesystem
     #[arg(
         short = 'm',
         long = "model",
@@ -89,6 +89,15 @@ struct Cli {
         default_value = "checkpoints/kokoro-v1.0.onnx"
     )]
     model_path: String,
+    
+    /// Path to the voices data file on the filesystem
+    #[arg(
+        short = 'd',
+        long = "data",
+        value_name = "DATA_PATH",
+        default_value = "data/voices-v1.0.bin"
+    )]
+    data_path: String,
 
     /// Which single voice to use or voices to combine to serve as the style of speech
     #[arg(
@@ -130,6 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Cli {
             lan,
             model_path,
+            data_path,
             style,
             speed,
             initial_silence,
@@ -137,7 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             mode,
         } = Cli::parse();
 
-        let tts = TTSKoko::new(&model_path).await;
+        let tts = TTSKoko::new(&model_path, &data_path).await;
 
         match mode {
             Mode::File {
