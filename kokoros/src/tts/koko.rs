@@ -34,7 +34,8 @@ pub struct TTSKoko {
 #[derive(Clone)]
 pub struct InitConfig {
     pub model_url: String,
-    pub json_data_f: String,
+    pub voices_data_f: String,
+    pub voices_data_f_url: String,
     pub sample_rate: u32,
 }
 
@@ -42,26 +43,38 @@ impl Default for InitConfig {
     fn default() -> Self {
         Self {
             model_url: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx".into(),
-            json_data_f: "data/voices-v1.0.bin".into(),
+            voices_data_f: "data/voices-v1.0.bin".into(),
+            voices_data_f_url: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin".into(),
             sample_rate: 24000,
         }
     }
 }
 
 impl TTSKoko {
-    pub async fn new (model_path: &str) -> Self {
-        Self::from_config(model_path, InitConfig::default()).await
+    pub async fn new (model_path: &str, voices_data_f: &str) -> Self {
+        let mut cfg = InitConfig::default();
+        cfg.voices_data_f = voices_data_f.to_string();
+        Self::from_config(model_path, cfg).await
     }
 
     pub async fn from_config(model_path: &str, cfg: InitConfig) -> Self {
-        let p = Path::new(model_path);
+        let model_p = Path::new(model_path);
         
-        if !p.exists() {
+        if !model_p.exists() {
             utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
                 .await
                 .expect("download model failed.");
         } else {
             eprintln!("load model from: {}", model_path);
+        }
+
+        let json_data_p = Path::new(&cfg.voices_data_f);
+        if !json_data_p.exists() {
+            utils::fileio::download_file_from_url(cfg.voices_data_f_url.as_str(), json_data_p.to_str().unwrap_or(""))
+                .await
+                .expect("download voices data file failed.");
+        } else {
+            eprintln!("load voices data file from: {}", cfg.voices_data_f);
         }
 
         let model = Arc::new(
@@ -308,7 +321,7 @@ impl TTSKoko {
     }
 
     pub fn load_voices(&mut self) {
-        let mut npz = NpzReader::new(File::open(self.init_config.json_data_f.as_str()).unwrap()).unwrap();
+        let mut npz = NpzReader::new(File::open(self.init_config.voices_data_f.as_str()).unwrap()).unwrap();
         for voice in npz.names().unwrap() {
             let voice_data: Result<Array3<f32>, _> = npz.by_name(&voice);
             let voice_data = voice_data.unwrap();
