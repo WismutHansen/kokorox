@@ -1,5 +1,6 @@
 use crate::tts::tokenize::tokenize;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::onn::ort_koko::{self};
@@ -53,13 +54,16 @@ impl TTSKoko {
     }
 
     pub async fn from_config(model_path: &str, voices_path: &str, cfg: InitConfig) -> Self {
-        utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
-            .await
-            .expect("download model failed.");
-
-        utils::fileio::download_file_from_url(cfg.voices_url.as_str(), voices_path)
-            .await
-            .expect("download voices data file failed.");
+        if !Path::new(model_path).exists() {
+            utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
+                .await
+                .expect("download model failed.");
+        }
+        if !Path::new(model_path).exists() {
+            utils::fileio::download_file_from_url(cfg.voices_url.as_str(), voices_path)
+                .await
+                .expect("download voices data file failed.");
+        }
 
         let model = Arc::new(
             ort_koko::OrtKoko::new(model_path.to_string())
