@@ -59,7 +59,8 @@ impl TTSKoko {
                 .await
                 .expect("download model failed.");
         }
-        if !Path::new(model_path).exists() {
+
+        if !Path::new(voices_path).exists() {
             utils::fileio::download_file_from_url(cfg.voices_url.as_str(), voices_path)
                 .await
                 .expect("download voices data file failed.");
@@ -179,7 +180,7 @@ impl TTSKoko {
             let phonemes = text_to_phonemes(&chunk, lan, None, true, false)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
                 .join("");
-
+            println!("phonemes: {}", phonemes);
             let mut tokens = tokenize(&phonemes);
 
             for _ in 0..initial_silence.unwrap_or(0) {
