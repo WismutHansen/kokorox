@@ -5,6 +5,9 @@
 <h1 align="center">🔥🔥🔥 Kokoro Rust</h1>
 
 ## [Zonos Rust Is On The Way?](https://github.com/lucasjinreal/Kokoros/issues/60)
+## [Spark-TTS On The Way?](https://github.com/lucasjinreal/Kokoros/issues/75)
+## [Orpheus-TTS On The Way?](https://github.com/lucasjinreal/Kokoros/issues/75)
+
 
 **AMSR**
 
