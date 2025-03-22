@@ -49,6 +49,9 @@ impl Default for InitConfig {
 }
 
 impl TTSKoko {
+    pub fn sample_rate(&self) -> u32 {
+        self.init_config.sample_rate
+    }
     pub async fn new(model_path: &str, voices_path: &str) -> Self {
         Self::from_config(model_path, voices_path, InitConfig::default()).await
     }
