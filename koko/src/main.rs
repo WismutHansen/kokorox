@@ -6,6 +6,7 @@ use kokoros::{
 use std::net::{IpAddr, SocketAddr};
 use std::{
     fs::{self},
+    io::Read,
     io::Write,
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -52,7 +53,18 @@ enum Mode {
     /// Continuously read from stdin to generate speech, outputting to stdout, for each line
     #[command(aliases = ["stdio", "stdin", "-"], long_flag_aliases = ["stdio", "stdin"])]
     Stream,
-
+    ///
+    /// Continuously process piped input by splitting sentences and streaming audio output.
+    Pipe {
+        /// Output WAV file path
+        #[arg(
+            short = 'o',
+            long = "output",
+            value_name = "OUTPUT_PATH",
+            default_value = "tmp/pipe_output.wav"
+        )]
+        output_path: String,
+    },
     /// Start an OpenAI-compatible HTTP server
     #[command(name = "openai", alias = "oai", long_flag_aliases = ["oai", "openai"])]
     OpenAI {
@@ -233,6 +245,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Err(e) => eprintln!("Error processing line: {}", e),
                     }
                 }
+            }
+            Mode::Pipe { output_path } => {
+                // Read all input from stdin.
+                let mut input = String::new();
+                std::io::stdin().read_to_string(&mut input)?;
+
+                // Use the sentence_segmentation crate's processor for English.
+                // This function applies regex-based rules to split the text into sentences.
+                let sentences = sentence_segmentation::processor::english(&input);
+
+                // Open output WAV file for writing.
+                let mut wav_file = std::fs::File::create(&output_path)?;
+
+                // Write a placeholder WAV header.
+                let header = WavHeader::new(1, tts.sample_rate(), 32);
+                header.write_header(&mut wav_file)?;
+                wav_file.flush()?;
+
+                // Process each sentence sequentially.
+                for sentence in sentences {
+                    let sentence_trimmed = sentence.trim();
+                    if sentence_trimmed.is_empty() {
+                        continue;
+                    }
+                    eprintln!("Processing sentence: {}", sentence_trimmed);
+
+                    // Generate audio for the sentence.
+                    let audio_chunk = tts
+                        .tts_raw_audio(sentence_trimmed, &lan, &style, speed, initial_silence)
+                        .map_err(|e| {
+                            eprintln!("Error generating audio for sentence: {}", e);
+                            e
+                        })?;
+
+                    // Write the generated audio chunk to the WAV file.
+                    write_audio_chunk(&mut wav_file, &audio_chunk)?;
+                    wav_file.flush()?;
+                }
+                eprintln!("Finished writing audio to {}", output_path);
             }
         }
 
