@@ -3,13 +3,67 @@ use kokoros::{
     tts::koko::{TTSKoko, TTSOpts},
     utils::wav::{write_audio_chunk, WavHeader},
 };
+use rodio::{OutputStream, Sink, Source};
 use std::net::{IpAddr, SocketAddr};
+use std::sync::mpsc::Receiver;
+use std::time::Duration;
 use std::{
     fs::{self},
     io::Read,
     io::Write,
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
+
+struct ChannelSource {
+    rx: Receiver<Vec<f32>>,
+    current: std::vec::IntoIter<i16>,
+    sample_rate: u32,
+}
+
+impl ChannelSource {
+    fn new(rx: Receiver<Vec<f32>>, sample_rate: u32) -> Self {
+        Self {
+            rx,
+            current: Vec::new().into_iter(),
+            sample_rate,
+        }
+    }
+}
+
+impl Iterator for ChannelSource {
+    type Item = i16;
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(sample) = self.current.next() {
+            Some(sample)
+        } else {
+            // Block until a new chunk arrives (or channel is closed)
+            match self.rx.recv() {
+                Ok(chunk) => {
+                    // Convert each f32 sample to i16 (scaling appropriately)
+                    let samples: Vec<i16> = chunk.iter().map(|&s| (s * 32767.0) as i16).collect();
+                    self.current = samples.into_iter();
+                    self.current.next()
+                }
+                Err(_) => None, // Channel closed.
+            }
+        }
+    }
+}
+
+impl Source for ChannelSource {
+    fn current_frame_len(&self) -> Option<usize> {
+        None // Unknown.
+    }
+    fn channels(&self) -> u16 {
+        1 // Mono audio.
+    }
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+    fn total_duration(&self) -> Option<Duration> {
+        None // Stream is indefinite.
+    }
+}
 
 #[derive(Subcommand, Debug)]
 enum Mode {
@@ -251,19 +305,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut input = String::new();
                 std::io::stdin().read_to_string(&mut input)?;
 
-                // Use the sentence_segmentation crate's processor for English.
-                // This function applies regex-based rules to split the text into sentences.
-                let sentences = sentence_segmentation::processor::english(&input);
+                // Set up rodio for immediate playback.
+                // Create a channel that sends Vec<f32> audio chunks.
+                let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
+                let (_stream, stream_handle) = OutputStream::try_default()?;
+                let sink = Sink::try_new(&stream_handle)?;
 
-                // Open output WAV file for writing.
+                // Create a streaming source from our channel with the sample rate from TTS.
+                let source = ChannelSource::new(rx, tts.sample_rate());
+                sink.append(source);
+
+                // Optionally, if you still want to write the output to a WAV file:
                 let mut wav_file = std::fs::File::create(&output_path)?;
-
-                // Write a placeholder WAV header.
                 let header = WavHeader::new(1, tts.sample_rate(), 32);
                 header.write_header(&mut wav_file)?;
                 wav_file.flush()?;
 
-                // Process each sentence sequentially.
+                // Split the input text into sentences using your chosen segmentation method.
+                // For example, if using sentence_segmentation crate:
+                let sentences = sentence_segmentation::processor::english(&input);
+
                 for sentence in sentences {
                     let sentence_trimmed = sentence.trim();
                     if sentence_trimmed.is_empty() {
@@ -279,11 +340,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             e
                         })?;
 
-                    // Write the generated audio chunk to the WAV file.
+                    // Immediately send the audio chunk to the playback channel.
+                    tx.send(audio_chunk.clone())?;
+
+                    // Optionally, also write the chunk to the output WAV file.
                     write_audio_chunk(&mut wav_file, &audio_chunk)?;
                     wav_file.flush()?;
                 }
-                eprintln!("Finished writing audio to {}", output_path);
+
+                // If you need to update the WAV header with the final file size, you can do so here.
+                // For immediate playback, this isn’t strictly necessary.
+
+                // Wait until playback is finished.
+                sink.sleep_until_end();
             }
         }
 
