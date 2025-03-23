@@ -1,26 +1,4 @@
-<div align="center">
-  <img src="https://img2023.cnblogs.com/blog/3572323/202501/3572323-20250112184100378-907988670.jpg" alt="Banner" width="400" height="190">
-</div>
-<br>
-<h1 align="center">🔥🔥🔥 Kokoro Rust</h1>
-
-## [Zonos Rust Is On The Way?](https://github.com/lucasjinreal/Kokoros/issues/60)
-
-## [Spark-TTS On The Way?](https://github.com/lucasjinreal/Kokoros/issues/75)
-
-## [Orpheus-TTS On The Way?](https://github.com/lucasjinreal/Kokoros/issues/75)
-
-**AMSR**
-
-<https://github.com/user-attachments/assets/1043dfd3-969f-4e10-8b56-daf8285e7420>
-
-**Digital Human**
-
-<https://github.com/user-attachments/assets/9f5e8fe9-d352-47a9-b4a1-418ec1769567>
-
-<p align="center">
-  <b>Give a star ⭐ if you like it!</b>
-</p>
+<h1 align="center">Kokoros - Kokoro Text-to-Speech in Rust</h1>
 
 [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface.
 This repo provides **insanely fast Kokoro infer in Rust**, you can now have your built TTS engine powered by Kokoro and infer fast by only a command of `koko`.
@@ -43,6 +21,7 @@ New Discord community: <https://discord.gg/E566zfDWqD>, Please join us if you in
 
 ## Updates
 
+- **_`2025.03.23`_**: **Piping now supports incoming streamed text from LLMs** The audio generation will now start once the first complete sentence is detected, making audio playback even faster.
 - **_`2025.03.22`_**: **Piping with direct playback supported.** You can now use `pipe` to use pipes to send text to kokoros, which will be split into sentences and the output will start to play once the first sentence has been generated.
 - **_`2025.01.22`_**: 🔥🔥🔥 **Streaming mode supported.** You can now using `--stream` to have fun with stream mode, kudos to [mroigo](https://github.com/mrorigo);
 - **_`2025.01.17`_**: 🔥🔥🔥 Style mixing supported! Now, listen the output AMSR effect by simply specific style: `af_sky.4+af_nicole.5`;
