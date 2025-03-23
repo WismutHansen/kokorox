@@ -9,8 +9,7 @@ use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use std::{
     fs::{self},
-    io::Read,
-    io::Write,
+    io::{Read, Write},
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -301,55 +300,97 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Mode::Pipe { output_path } => {
-                // Read all input from stdin.
-                let mut input = String::new();
-                std::io::stdin().read_to_string(&mut input)?;
+                // Create an asynchronous reader for stdin.
+                let stdin = tokio::io::stdin();
+                let mut reader = BufReader::new(stdin);
+                let mut buffer = String::new();
 
                 // Set up rodio for immediate playback.
-                // Create a channel that sends Vec<f32> audio chunks.
+                // This channel will receive raw audio chunks (Vec<f32>) from TTS generation.
                 let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
                 let (_stream, stream_handle) = OutputStream::try_default()?;
                 let sink = Sink::try_new(&stream_handle)?;
-
-                // Create a streaming source from our channel with the sample rate from TTS.
                 let source = ChannelSource::new(rx, tts.sample_rate());
                 sink.append(source);
 
-                // Optionally, if you still want to write the output to a WAV file:
+                // Also create a WAV file to write the output.
                 let mut wav_file = std::fs::File::create(&output_path)?;
                 let header = WavHeader::new(1, tts.sample_rate(), 32);
                 header.write_header(&mut wav_file)?;
                 wav_file.flush()?;
 
-                // Split the input text into sentences using your chosen segmentation method.
-                // For example, if using sentence_segmentation crate:
-                let sentences = sentence_segmentation::processor::english(&input);
-
-                for sentence in sentences {
-                    let sentence_trimmed = sentence.trim();
-                    if sentence_trimmed.is_empty() {
-                        continue;
+                loop {
+                    // Read a new line from stdin.
+                    let mut line = String::new();
+                    let bytes_read = reader.read_line(&mut line).await?;
+                    if bytes_read == 0 {
+                        // EOF reached.
+                        break;
                     }
-                    eprintln!("Processing sentence: {}", sentence_trimmed);
+                    buffer.push_str(&line);
 
-                    // Generate audio for the sentence.
-                    let audio_chunk = tts
-                        .tts_raw_audio(sentence_trimmed, &lan, &style, speed, initial_silence)
-                        .map_err(|e| {
-                            eprintln!("Error generating audio for sentence: {}", e);
-                            e
-                        })?;
+                    // Use your sentence splitter (here we assume English; adjust if needed)
+                    let sentences = sentence_segmentation::processor::english(&buffer);
 
-                    // Immediately send the audio chunk to the playback channel.
+                    if !sentences.is_empty() {
+                        // Clone sentences so we can manipulate.
+                        let mut complete_sentences = sentences.clone();
+
+                        // Check if the last sentence appears incomplete.
+                        if let Some(last_sentence) = complete_sentences.last() {
+                            let trimmed = last_sentence.trim();
+                            if !(trimmed.ends_with('.')
+                                || trimmed.ends_with('!')
+                                || trimmed.ends_with('?'))
+                            {
+                                // Remove the incomplete sentence from processing.
+                                complete_sentences.pop();
+                            }
+                        }
+
+                        // If there is at least one complete sentence, process it.
+                        if !complete_sentences.is_empty() {
+                            for sentence in complete_sentences.iter() {
+                                let sentence = sentence.trim();
+                                if sentence.is_empty() {
+                                    continue;
+                                }
+                                eprintln!("Processing sentence: {}", sentence);
+
+                                let audio_chunk = tts
+                                    .tts_raw_audio(sentence, &lan, &style, speed, initial_silence)
+                                    .map_err(|e| {
+                                        eprintln!("Error generating audio for sentence: {}", e);
+                                        e
+                                    })?;
+                                // Immediately send the audio chunk for playback.
+                                tx.send(audio_chunk.clone())?;
+                                // Also write the chunk to the WAV file.
+                                write_audio_chunk(&mut wav_file, &audio_chunk)?;
+                                wav_file.flush()?;
+                            }
+                            // Remove the processed text from the beginning of the buffer.
+                            // One strategy is to join the complete sentences and then remove that prefix.
+                            let processed_text = complete_sentences.join(" ");
+                            if buffer.starts_with(&processed_text) {
+                                buffer = buffer[processed_text.len()..].to_string();
+                            } else {
+                                // If matching fails (due to extra spaces etc.), clear the buffer.
+                                buffer.clear();
+                            }
+                        }
+                    }
+                }
+
+                // Process any remaining text (e.g. if EOF arrives with an incomplete sentence).
+                if !buffer.trim().is_empty() {
+                    eprintln!("Processing final text: {}", buffer.trim());
+                    let audio_chunk =
+                        tts.tts_raw_audio(&buffer, &lan, &style, speed, initial_silence)?;
                     tx.send(audio_chunk.clone())?;
-
-                    // Optionally, also write the chunk to the output WAV file.
                     write_audio_chunk(&mut wav_file, &audio_chunk)?;
                     wav_file.flush()?;
                 }
-
-                // If you need to update the WAV header with the final file size, you can do so here.
-                // For immediate playback, this isn’t strictly necessary.
 
                 // Wait until playback is finished.
                 sink.sleep_until_end();
