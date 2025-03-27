@@ -54,6 +54,7 @@ impl Default for InitConfig {
 
 // Function to fix common Spanish phoneme issues
 fn fix_spanish_phonemes(phonemes: &str) -> String {
+    println!("DEBUG: Fixing Spanish phonemes: {}", phonemes);
     let mut fixed = phonemes.to_string();
     
     // Fix for words ending in "ción" (often mispronounced)
