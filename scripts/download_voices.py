@@ -37,17 +37,57 @@ RESOURCES = {
 
 # Information about supported languages (for documentation purposes)
 SUPPORTED_LANGUAGES = {
-    "en": "English",
-    "zh": "Chinese",
+    # English variants
+    "en-us": "English (US)",
+    "en-gb": "English (UK)",
+    "en-au": "English (Australia)",
+    "en-ca": "English (Canada)",
+    "en-nz": "English (New Zealand)",
+    "en-ie": "English (Ireland)",
+    "en-za": "English (South Africa)",
+    "en-in": "English (India)",
+    
+    # Chinese variants
+    "zh": "Chinese (Mandarin)",
+    "zh-cn": "Chinese (Simplified)",
+    "zh-tw": "Chinese (Traditional)",
+    "zh-yue": "Chinese (Cantonese)",
+    
+    # East Asian languages
     "ja": "Japanese",
-    "de": "German",
-    "fr": "French",
-    "es": "Spanish",
-    "pt": "Portuguese",
-    "ru": "Russian",
     "ko": "Korean",
-    "ar": "Arabic",
+    
+    # European languages
+    "de": "German",
+    "fr-fr": "French (France)",
+    "fr-ca": "French (Canada)",
+    "it": "Italian",
+    "es": "Spanish (Spain)",
+    "es-la": "Spanish (Latin America)",
+    "pt-pt": "Portuguese (Portugal)",
+    "pt-br": "Portuguese (Brazil)",
+    "ru": "Russian",
+    "nl": "Dutch",
+    "sv": "Swedish",
+    "da": "Danish",
+    "cs": "Czech",
+    "pl": "Polish",
+    "hu": "Hungarian",
+    "fi": "Finnish",
+    "ro": "Romanian",
+    "el": "Greek",
+    "tr": "Turkish",
+    
+    # South/Southeast Asian languages
     "hi": "Hindi",
+    "bn": "Bengali",
+    "vi": "Vietnamese",
+    "th": "Thai",
+    
+    # Middle Eastern languages
+    "ar": "Arabic",
+    "fa": "Persian (Farsi)",
+    "he": "Hebrew",
 }
 
 
