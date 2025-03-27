@@ -59,6 +59,14 @@ struct SpeechRequest {
 
     #[serde(default)]
     initial_silence: Option<usize>,
+    
+    // Language for the text to be synthesized
+    #[serde(default)]
+    language: Option<String>,
+    
+    // Enable automatic language detection
+    #[serde(default)]
+    auto_detect: Option<bool>,
 }
 
 pub async fn create_server(tts: TTSKoko) -> Router {
@@ -112,10 +120,23 @@ async fn handle_tts(
         response_format,
         speed: Speed(speed),
         initial_silence,
+        language,
+        auto_detect,
     }): Json<SpeechRequest>,
 ) -> Result<Response, SpeechError> {
+    // Determine language - either specified, auto-detected, or default
+    let lan = language.unwrap_or_else(|| "en-us".to_string());
+    let auto_detect_language = auto_detect.unwrap_or(false);
+    
+    // Log info about the request
+    if auto_detect_language {
+        println!("API Request: Auto-detecting language for text: '{}'", input);
+    } else {
+        println!("API Request: Using language '{}' for text: '{}'", lan, input);
+    }
+    
     let raw_audio = tts
-        .tts_raw_audio(&input, "en-us", &voice, speed, initial_silence, false)
+        .tts_raw_audio(&input, &lan, &voice, speed, initial_silence, auto_detect_language, false)
         .map_err(SpeechError::Koko)?;
 
     let sample_rate = TTSKokoInitConfig::default().sample_rate;

@@ -1,4 +1,4 @@
-use crate::tts::phonemizer::detect_language;
+use crate::tts::phonemizer::{detect_language, get_default_voice_for_language};
 use crate::tts::tokenize::tokenize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -17,6 +17,7 @@ pub struct TTSOpts<'a> {
     pub txt: &'a str,
     pub lan: &'a str,
     pub auto_detect_language: bool,
+    pub force_style: bool,  // Whether to override auto style selection
     pub style_name: &'a str,
     pub save_path: &'a str,
     pub mono: bool,
@@ -28,6 +29,7 @@ pub struct TTSOpts<'a> {
 pub struct TTSKoko {
     #[allow(dead_code)]
     model_path: String,
+    voices_path: String,
     model: Arc<ort_koko::OrtKoko>,
     styles: HashMap<String, Vec<[[f32; 256]; 1]>>,
     init_config: InitConfig,
@@ -54,6 +56,7 @@ impl TTSKoko {
     pub fn sample_rate(&self) -> u32 {
         self.init_config.sample_rate
     }
+    
     pub async fn new(model_path: &str, voices_path: &str) -> Self {
         Self::from_config(model_path, voices_path, InitConfig::default()).await
     }
@@ -83,10 +86,41 @@ impl TTSKoko {
 
         TTSKoko {
             model_path: model_path.to_string(),
+            voices_path: voices_path.to_string(),
             model,
             styles,
             init_config: cfg,
         }
+    }
+    
+    // Check if the voices file is a custom voices file
+    pub fn is_using_custom_voices(&self, data_path: &str) -> bool {
+        // Check if the file path contains "custom"
+        if data_path.contains("custom") {
+            println!("Using custom voices file: {}", data_path);
+            return true;
+        }
+        
+        // Also check for specific known custom voice styles in the loaded styles
+        let has_custom_styles = self.styles.keys().any(|k| 
+            k.starts_with("en_") || 
+            k.starts_with("zh_") || 
+            k.starts_with("ja_") ||
+            k.starts_with("fr_") ||
+            k.starts_with("de_") || 
+            k.starts_with("es_") || 
+            k.starts_with("pt_") || 
+            k.starts_with("ru_") || 
+            k.starts_with("ko_")
+        );
+        
+        if has_custom_styles {
+            println!("Custom voice styles detected in: {}", data_path);
+            return true;
+        }
+        
+        println!("Using standard voices file: {}", data_path);
+        false
     }
 
     fn split_text_into_chunks(&self, text: &str, max_tokens: usize) -> Vec<String> {
@@ -179,6 +213,7 @@ impl TTSKoko {
         speed: f32,
         initial_silence: Option<usize>,
         auto_detect_language: bool,
+        force_style: bool,
     ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
         // Split text into appropriate chunks
         let chunks = self.split_text_into_chunks(txt, 500); // Using 500 to leave 12 tokens of margin
@@ -191,9 +226,32 @@ impl TTSKoko {
             lan.to_string()
         };
 
-        if auto_detect_language {
-            println!("Detected language: {}", language);
-        }
+        // Determine if we're using custom voices
+        let is_custom = self.is_using_custom_voices(&self.voices_path);
+        
+        // Determine which style to use
+        let effective_style = if auto_detect_language && !force_style {
+            // Auto-detect mode with automatic style selection:
+            // Use language-specific style if available
+            let default_style = get_default_voice_for_language(&language, is_custom);
+            
+            // Check if the default style exists in our voices
+            if self.styles.contains_key(&default_style) {
+                println!("Detected language: {} - Using voice style: {}", language, default_style);
+                default_style
+            } else {
+                // Fall back to user-provided style if default not available
+                println!("Detected language: {} - Default voice unavailable, using: {}", language, style_name);
+                style_name.to_string()
+            }
+        } else {
+            // Either manual language mode or force_style mode:
+            // Use the provided style
+            if auto_detect_language {
+                println!("Detected language: {} - User override: using voice style: {}", language, style_name);
+            }
+            style_name.to_string()
+        };
 
         for chunk in chunks {
             // Convert chunk to phonemes
@@ -207,8 +265,8 @@ impl TTSKoko {
                 tokens.insert(0, 30);
             }
 
-            // Get style vectors once
-            let styles = self.mix_styles(style_name, tokens.len())?;
+            // Get style vectors once - using the effective style determined above
+            let styles = self.mix_styles(&effective_style, tokens.len())?;
 
             // pad a 0 to start and end of tokens
             let mut padded_tokens = vec![0];
@@ -244,6 +302,7 @@ impl TTSKoko {
             txt,
             lan,
             auto_detect_language,
+            force_style,
             style_name,
             save_path,
             mono,
@@ -251,7 +310,7 @@ impl TTSKoko {
             initial_silence,
         }: TTSOpts,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let audio = self.tts_raw_audio(&txt, lan, style_name, speed, initial_silence, auto_detect_language)?;
+        let audio = self.tts_raw_audio(&txt, lan, style_name, speed, initial_silence, auto_detect_language, force_style)?;
 
         // Save to file
         if mono {
