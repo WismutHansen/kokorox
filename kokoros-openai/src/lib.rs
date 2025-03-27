@@ -128,6 +128,9 @@ async fn handle_tts(
     let lan = language.unwrap_or_else(|| "en-us".to_string());
     let auto_detect_language = auto_detect.unwrap_or(false);
     
+    // Determine if we should force style (always false for API)
+    let force_style = false;
+    
     // Log info about the request
     if auto_detect_language {
         println!("API Request: Auto-detecting language for text: '{}'", input);
@@ -136,7 +139,7 @@ async fn handle_tts(
     }
     
     let raw_audio = tts
-        .tts_raw_audio(&input, &lan, &voice, speed, initial_silence, auto_detect_language, false)
+        .tts_raw_audio(&input, &lan, &voice, speed, initial_silence, auto_detect_language, force_style)
         .map_err(SpeechError::Koko)?;
 
     let sample_rate = TTSKokoInitConfig::default().sample_rate;

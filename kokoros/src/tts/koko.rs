@@ -52,9 +52,68 @@ impl Default for InitConfig {
     }
 }
 
+// Function to fix common Spanish phoneme issues
+fn fix_spanish_phonemes(phonemes: &str) -> String {
+    let mut fixed = phonemes.to_string();
+    
+    // Fix for words ending in "ción" (often mispronounced)
+    // The correct phonemes should emphasize the "ón" sound and place stress on it
+    if fixed.contains("sjon") {
+        fixed = fixed.replace("sjon", "sjˈon");
+    }
+    
+    // Fix for words ending in "ciones" (plural form)
+    if fixed.contains("sjones") {
+        fixed = fixed.replace("sjones", "sjˈones");
+    }
+    
+    // Fix for "político" and similar words with accented i
+    if fixed.contains("politiko") {
+        fixed = fixed.replace("politiko", "polˈitiko");
+    }
+    
+    // Common Spanish word corrections
+    let corrections = [
+        // Add stress markers for common words
+        ("nasjon", "nasjˈon"),         // nación
+        ("edukasjon", "edukasjˈon"),   // educación
+        ("komunikasjon", "komunikasjˈon"), // comunicación
+        ("oɾɣanisasjon", "oɾɣanisasjˈon"), // organización
+        ("kondisjon", "kondisjˈon"),   // condición
+        
+        // Spanish stress patterns on penultimate syllable for words 
+        // ending in 'n', 's', or vowel (without written accent)
+        ("tɾabaxa", "tɾabˈaxa"),      // trabaja
+        ("komida", "komˈida"),        // comida
+        ("espeɾansa", "espeɾˈansa"),  // esperanza
+        
+        // Words with stress on final syllable (ending in consonants other than n, s)
+        ("papeɫ", "papˈeɫ"),         // papel
+        ("maðɾið", "maðɾˈið"),       // Madrid
+        
+        // Words with explicit accents
+        ("politika", "polˈitika"),    // política
+        ("ekonomia", "ekonomˈia"),    // economía
+    ];
+    
+    for (pattern, replacement) in corrections.iter() {
+        if fixed.contains(pattern) {
+            fixed = fixed.replace(pattern, replacement);
+        }
+    }
+    
+    // Add more fixes here based on observations
+    
+    fixed
+}
+
 impl TTSKoko {
     pub fn sample_rate(&self) -> u32 {
         self.init_config.sample_rate
+    }
+    
+    pub fn voices_path(&self) -> &str {
+        &self.voices_path
     }
     
     pub async fn new(model_path: &str, voices_path: &str) -> Self {
@@ -134,9 +193,13 @@ impl TTSKoko {
 
         let mut current_chunk = String::new();
 
-        // Detect language or use English as fallback
+        // Note: We don't use auto-detection in this function anymore
+        // The language to use will be properly determined in tts_raw_audio
+        // and phonemization will happen with the correct language there
+        
+        // For now we use detect_language as fallback for sentence chunking only
         let lang = detect_language(text).unwrap_or_else(|| "en-us".to_string());
-
+        
         for sentence in sentences {
             // Clean up the sentence and add back punctuation
             let sentence = format!("{}.", sentence.trim());
@@ -223,6 +286,7 @@ impl TTSKoko {
         let language = if auto_detect_language {
             detect_language(txt).unwrap_or_else(|| lan.to_string())
         } else {
+            println!("Using manually specified language: {}", lan);
             lan.to_string()
         };
 
@@ -230,35 +294,64 @@ impl TTSKoko {
         let is_custom = self.is_using_custom_voices(&self.voices_path);
         
         // Determine which style to use
-        let effective_style = if auto_detect_language && !force_style {
-            // Auto-detect mode with automatic style selection:
-            // Use language-specific style if available
+        let effective_style = if !force_style {
+            // Try to automatically select a voice appropriate for the language
+            // This applies to both auto-detect and manual language selection modes
             let default_style = get_default_voice_for_language(&language, is_custom);
             
             // Check if the default style exists in our voices
             if self.styles.contains_key(&default_style) {
-                println!("Detected language: {} - Using voice style: {}", language, default_style);
+                if auto_detect_language {
+                    println!("Detected language: {} - Using voice style: {}", language, default_style);
+                } else {
+                    println!("Manual language: {} - Using appropriate voice style: {}", language, default_style);
+                }
                 default_style
             } else {
                 // Fall back to user-provided style if default not available
-                println!("Detected language: {} - Default voice unavailable, using: {}", language, style_name);
+                if auto_detect_language {
+                    println!("Detected language: {} - Default voice unavailable, using: {}", language, style_name);
+                } else {
+                    println!("Manual language: {} - No specific voice available, using: {}", language, style_name);
+                }
                 style_name.to_string()
             }
         } else {
-            // Either manual language mode or force_style mode:
-            // Use the provided style
+            // User has explicitly forced a specific style
             if auto_detect_language {
                 println!("Detected language: {} - User override: using voice style: {}", language, style_name);
+            } else {
+                println!("Manual language mode: {} - User force-style: {}", language, style_name);
             }
             style_name.to_string()
         };
 
         for chunk in chunks {
-            // Convert chunk to phonemes
-            let phonemes = text_to_phonemes(&chunk, &language, None, true, false)
+            // Convert chunk to phonemes using the determined language
+            println!("Processing chunk with language: {}", language);
+            
+            // Add more detailed logging for Spanish words
+            if language.starts_with("es") {
+                println!("Spanish text to phonemize: {}", chunk);
+            }
+            
+            let mut phonemes = text_to_phonemes(&chunk, &language, None, true, false)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
                 .join("");
+            
+            // Apply Spanish-specific phoneme corrections
+            if language.starts_with("es") {
+                phonemes = fix_spanish_phonemes(&phonemes);
+            }
+            
             println!("phonemes: {}", phonemes);
+            
+            // Add special debug for Spanish problematic words
+            if language.starts_with("es") && (chunk.contains("ción") || chunk.contains("politic")) {
+                println!("DEBUG - Spanish special case detected:");
+                println!("Original: {}", chunk);
+                println!("Phonemes after fix: {}", phonemes);
+            }
             let mut tokens = tokenize(&phonemes);
 
             for _ in 0..initial_silence.unwrap_or(0) {
