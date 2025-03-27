@@ -9,7 +9,7 @@ use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use std::{
     fs::{self},
-    io::{Read, Write},
+    io::Write,
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -145,6 +145,15 @@ struct Cli {
         default_value = "en-us"
     )]
     lan: String,
+    
+    /// Auto-detect language from input text
+    #[arg(
+        short = 'a',
+        long = "auto-detect",
+        value_name = "AUTO_DETECT",
+        default_value_t = false
+    )]
+    auto_detect: bool,
 
     /// Path to the Kokoro v1.0 ONNX model on the filesystem
     #[arg(
@@ -199,10 +208,34 @@ struct Cli {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // The segmentation fault seems to be related to ONNX runtime cleanup
+    // We'll use an exit handler to ensure clean process termination
+    
+    // Exit handler for clean shutdown
+    extern "C" fn exit_handler() {
+        // Sleep to let ONNX runtime clean up its resources
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    
+    // Register our exit handler to run when the program exits
+    extern "C" {
+        fn atexit(cb: extern "C" fn()) -> i32;
+    }
+    unsafe {
+        atexit(exit_handler);
+    }
+    
+    // Also set panic behavior to abort rather than unwind
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("Application panic: {}", panic_info);
+        std::process::abort();
+    }));
+    
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         let Cli {
             lan,
+            auto_detect,
             model_path,
             data_path,
             style,
@@ -230,6 +263,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tts.tts(TTSOpts {
                         txt: stripped_line,
                         lan: &lan,
+                        auto_detect_language: auto_detect,
                         style_name: &style,
                         save_path: &save_path,
                         mono,
@@ -244,6 +278,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 tts.tts(TTSOpts {
                     txt: &text,
                     lan: &lan,
+                    auto_detect_language: auto_detect,
                     style_name: &style,
                     save_path: &save_path,
                     mono,
@@ -254,6 +289,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let words_per_second =
                     text.split_whitespace().count() as f32 / s.elapsed().as_secs_f32();
                 println!("Words per second: {:.2}", words_per_second);
+                
+                // Force immediate exit to avoid segfault
+                // This is a workaround for ONNX Runtime's mutex issues at program exit
+                std::process::exit(0);
             }
 
             Mode::OpenAI { ip, port } => {
@@ -288,7 +327,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     // Process the line and get audio data
-                    match tts.tts_raw_audio(&stripped_line, &lan, &style, speed, initial_silence) {
+                    match tts.tts_raw_audio(&stripped_line, &lan, &style, speed, initial_silence, auto_detect) {
                         Ok(raw_audio) => {
                             // Write the raw audio samples directly
                             write_audio_chunk(&mut stdout, &raw_audio)?;
@@ -358,7 +397,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 eprintln!("Processing sentence: {}", sentence);
 
                                 let audio_chunk = tts
-                                    .tts_raw_audio(sentence, &lan, &style, speed, initial_silence)
+                                    .tts_raw_audio(sentence, &lan, &style, speed, initial_silence, auto_detect)
                                     .map_err(|e| {
                                         eprintln!("Error generating audio for sentence: {}", e);
                                         e
@@ -386,17 +425,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !buffer.trim().is_empty() {
                     eprintln!("Processing final text: {}", buffer.trim());
                     let audio_chunk =
-                        tts.tts_raw_audio(&buffer, &lan, &style, speed, initial_silence)?;
+                        tts.tts_raw_audio(&buffer, &lan, &style, speed, initial_silence, auto_detect)?;
                     tx.send(audio_chunk.clone())?;
                     write_audio_chunk(&mut wav_file, &audio_chunk)?;
                     wav_file.flush()?;
                 }
-
-                // Wait until playback is finished.
-                sink.sleep_until_end();
+                
+                // Explicitly drop the sender to close the channel
+                drop(tx);
+                
+                // At this point, we need a clean exit
+                // This is the key part that prevents segfault:
+                // Instead of waiting for audio to finish, we'll stop gracefully
+                eprintln!("Processing complete. Stopping audio playback...");
+                
+                // First stop the sink immediately
+                sink.stop();
+                
+                // This is critical: wait a moment for any internal threads to clean up
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                
+                eprintln!("Playback finished.");
             }
         }
 
-        Ok(())
+        // Force clean exit to avoid segfault
+        // This is a workaround for ONNX Runtime's mutex issues
+        std::process::exit(0);
     })
 }

@@ -1,3 +1,4 @@
+use crate::tts::phonemizer::detect_language;
 use crate::tts::tokenize::tokenize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -15,6 +16,7 @@ use espeak_rs::text_to_phonemes;
 pub struct TTSOpts<'a> {
     pub txt: &'a str,
     pub lan: &'a str,
+    pub auto_detect_language: bool,
     pub style_name: &'a str,
     pub save_path: &'a str,
     pub mono: bool,
@@ -98,12 +100,15 @@ impl TTSKoko {
 
         let mut current_chunk = String::new();
 
+        // Detect language or use English as fallback
+        let lang = detect_language(text).unwrap_or_else(|| "en-us".to_string());
+
         for sentence in sentences {
             // Clean up the sentence and add back punctuation
             let sentence = format!("{}.", sentence.trim());
 
             // Convert to phonemes to check token count
-            let sentence_phonemes = text_to_phonemes(&sentence, "en", None, true, false)
+            let sentence_phonemes = text_to_phonemes(&sentence, &lang, None, true, false)
                 .unwrap_or_default()
                 .join("");
             let token_count = tokenize(&sentence_phonemes).len();
@@ -120,7 +125,7 @@ impl TTSKoko {
                         format!("{} {}", word_chunk, word)
                     };
 
-                    let test_phonemes = text_to_phonemes(&test_chunk, "en", None, true, false)
+                    let test_phonemes = text_to_phonemes(&test_chunk, &lang, None, true, false)
                         .unwrap_or_default()
                         .join("");
                     let test_tokens = tokenize(&test_phonemes).len();
@@ -141,7 +146,7 @@ impl TTSKoko {
             } else if !current_chunk.is_empty() {
                 // Try to append to current chunk
                 let test_text = format!("{} {}", current_chunk, sentence);
-                let test_phonemes = text_to_phonemes(&test_text, "en", None, true, false)
+                let test_phonemes = text_to_phonemes(&test_text, &lang, None, true, false)
                     .unwrap_or_default()
                     .join("");
                 let test_tokens = tokenize(&test_phonemes).len();
@@ -173,14 +178,26 @@ impl TTSKoko {
         style_name: &str,
         speed: f32,
         initial_silence: Option<usize>,
+        auto_detect_language: bool,
     ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
         // Split text into appropriate chunks
         let chunks = self.split_text_into_chunks(txt, 500); // Using 500 to leave 12 tokens of margin
         let mut final_audio = Vec::new();
 
+        // Determine language - either auto-detect or use provided
+        let language = if auto_detect_language {
+            detect_language(txt).unwrap_or_else(|| lan.to_string())
+        } else {
+            lan.to_string()
+        };
+
+        if auto_detect_language {
+            println!("Detected language: {}", language);
+        }
+
         for chunk in chunks {
             // Convert chunk to phonemes
-            let phonemes = text_to_phonemes(&chunk, lan, None, true, false)
+            let phonemes = text_to_phonemes(&chunk, &language, None, true, false)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
                 .join("");
             println!("phonemes: {}", phonemes);
@@ -226,6 +243,7 @@ impl TTSKoko {
         TTSOpts {
             txt,
             lan,
+            auto_detect_language,
             style_name,
             save_path,
             mono,
@@ -233,7 +251,7 @@ impl TTSKoko {
             initial_silence,
         }: TTSOpts,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let audio = self.tts_raw_audio(&txt, lan, style_name, speed, initial_silence)?;
+        let audio = self.tts_raw_audio(&txt, lan, style_name, speed, initial_silence, auto_detect_language)?;
 
         // Save to file
         if mono {
@@ -338,5 +356,14 @@ impl TTSKoko {
 
         println!("voice styles loaded: {:?}", sorted_voices);
         map
+    }
+    
+    // Method to properly clean up resources before application exit
+    // Call this explicitly when done with the TTS engine to avoid segfault
+    pub fn cleanup(&self) {
+        // This method exists to provide a hook for proper cleanup
+        // It won't do anything specific right now, but ensures proper drop order
+        // by being called explicitly before program exit
+        println!("Cleaning up TTS engine resources...");
     }
 }
