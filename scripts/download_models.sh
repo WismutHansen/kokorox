@@ -1,2 +1,9 @@
-mkdir checkpoints
-wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx -O "checkpoints/kokoro-v1.0.onnx"
+#!/bin/bash
+# Legacy script for backward compatibility
+# Now just calls the Python download script
+
+echo "NOTE: This script is maintained for backward compatibility."
+echo "It is recommended to use 'python scripts/download_voices.py --all' instead."
+echo ""
+
+python scripts/download_voices.py --model
