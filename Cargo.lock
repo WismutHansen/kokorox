@@ -1266,6 +1266,7 @@ dependencies = [
  "ctrlc",
  "kokoros",
  "kokoros-openai",
+ "regex",
  "rodio",
  "sentence_segmentation",
  "tokio",

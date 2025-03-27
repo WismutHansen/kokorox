@@ -58,55 +58,91 @@ pub fn restore_spanish_accents(text: &str) -> String {
     
     // Common Spanish words with accents that might be lost
     let replacements = [
+        // Spanish verbs with missing accents on the final "o" 
+        // Very common issue in the past tense (preterite)
+        ("dur", "duró"),
+        ("Dur", "Duró"),
+        ("comenz", "comenzó"),
+        ("termin", "terminó"),
+        ("llam", "llamó"),
+        ("habl", "habló"),
+        ("escrib", "escribió"),
+        ("recib", "recibió"),
+        ("declar", "declaró"),
+        ("viaj", "viajó"),
+        ("entr", "entró"),
+        ("pregunt", "preguntó"),
+        ("cambi", "cambió"),
+        ("dej", "dejó"),
+        ("explic", "explicó"),
+        ("pens", "pensó"),
+        
+        // Common politica/política variants
         ("politica", "política"),
         ("poltica", "política"),
         ("Politica", "Política"),
         ("Poltica", "Política"),
         
+        // Words ending in -ía that are frequently missing the accent
+        ("economia", "economía"),
+        ("Economia", "Economía"),
+        ("categoria", "categoría"),
+        ("tecnologia", "tecnología"),
+        ("fotografia", "fotografía"),
+        ("geografia", "geografía"),
+        ("filosofia", "filosofía"),
+        ("psicologia", "psicología"),
+        ("sociologia", "sociología"),
+        ("biologia", "biología"),
+        ("energia", "energía"),
+        ("garantia", "garantía"),
+        ("compania", "compañía"),
+        ("teoria", "teoría"),
+        ("melodia", "melodía"),
+        ("autonomia", "autonomía"),
+        ("ideologia", "ideología"),
+        
+        // Words with accent on í
         ("aqu", "aquí"),
         ("Aqu", "Aquí"),
+        ("pais", "país"),
+        ("calificacion", "calificación"),
         
-        ("tecnologicas", "tecnológicas"),
-        ("tecnologicos", "tecnológicos"),
-        ("tecnologia", "tecnología"),
-        
-        ("publicas", "públicas"),
-        ("publicos", "públicos"),
-        ("publico", "público"),
-        
-        ("creacion", "creación"),
-        ("creacin", "creación"),
-        
-        ("electronica", "electrónica"),
-        ("electronico", "electrónico"),
-        
-        ("electronico", "electrónico"),
-        ("electrica", "eléctrica"),
-        ("electrico", "eléctrico"),
-        
-        ("musica", "música"),
-        ("economico", "económico"),
-        ("economica", "económica"),
-        
-        ("practico", "práctico"),
-        ("practica", "práctica"),
-        
+        // Words with accent on é
+        ("epoca", "época"),
         ("telefono", "teléfono"),
         ("telefonos", "teléfonos"),
-        
         ("metodo", "método"),
         ("metodos", "métodos"),
-        
-        ("polemica", "polémica"),
-        ("polemico", "polémico"),
-        
-        ("ultimo", "último"),
-        ("ultimos", "últimos"),
-        
         ("medico", "médico"),
         ("medica", "médica"),
+        ("electrico", "eléctrico"),
+        ("electrica", "eléctrica"),
+        ("electronico", "electrónico"),
+        ("electronica", "electrónica"),
         
-        // These are the most common, add more as needed
+        // Words with accent on á
+        ("practico", "práctico"),
+        ("practica", "práctica"),
+        ("grafico", "gráfico"),
+        ("grafica", "gráfica"),
+        ("matematica", "matemática"),
+        ("matematicas", "matemáticas"),
+        ("trafico", "tráfico"),
+        
+        // Words with accent on ó
+        ("perodo", "período"),
+        ("periodico", "periódico"),
+        ("proposito", "propósito"),
+        ("propositos", "propósitos"),
+        ("economico", "económico"),
+        ("economica", "económica"),
+        ("historico", "histórico"),
+        ("historica", "histórica"),
+        ("ultimos", "últimos"),
+        ("ultimo", "último"),
+        
+        // Common pronouns and short words with accents
         ("el.", "él."),
         ("el,", "él,"),
         ("el?", "él?"),
@@ -120,6 +156,7 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("tu ", "tú "),
         ("mi ", "mí "),
         
+        // Words ending in -ión (extremely common in Spanish)
         ("innovacion", "innovación"),
         ("informacion", "información"),
         ("comunicacion", "comunicación"),
@@ -137,32 +174,108 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("organizacion", "organización"),
         ("celebracion", "celebración"),
         ("comunicacin", "comunicación"),
+        ("construccion", "construcción"),
+        ("evolucion", "evolución"),
+        ("direccion", "dirección"),
+        ("coleccion", "colección"),
+        ("identificacion", "identificación"),
+        ("revolucion", "revolución"),
+        ("administracion", "administración"),
+        ("civilizacion", "civilización"),
+        ("seccion", "sección"),
+        ("proteccion", "protección"),
+        ("declaracion", "declaración"),
+        ("rebelion", "rebelión"),
+        ("creacion", "creación"),
+        ("creacin", "creación"),
         
         // Words with ñ
-        ("compania", "compañía"),
+        ("companía", "compañía"),
         ("compani", "compañí"),
         ("Compania", "Compañía"),
         ("Compaa", "Compañía"),
         ("Espana", "España"),
         ("espanol", "español"),
+        ("montana", "montaña"),
+        ("manana", "mañana"),
+        ("nino", "niño"),
+        ("nina", "niña"),
+        ("senor", "señor"),
+        ("senora", "señora"),
+        ("sueno", "sueño"),
+        ("pequeno", "pequeño"),
+        ("pequena", "pequeña"),
         
         // Words with ü
         ("linguistica", "lingüística"),
         ("bilinguismo", "bilingüismo"),
         ("pinguino", "pingüino"),
+        ("verguenza", "vergüenza"),
+        ("antiguedad", "antigüedad"),
+        ("bilingue", "bilingüe"),
     ];
     
+    // First log the text for debugging
+    println!("ACCENT RESTORATION: Processing text: {}", fixed);
+    
+    // First, apply specific word replacements
     for (wrong, correct) in replacements.iter() {
         if fixed.contains(wrong) {
-            fixed = fixed.replace(wrong, correct);
+            // Only replace if this is a whole word match (to avoid partial matches)
+            // e.g., replace "dur" with "duró" only when it's the whole word, not part of "durante"
+            
+            // For words with spaces, we can't use the word boundary technique, so apply directly
+            if wrong.contains(" ") {
+                fixed = fixed.replace(wrong, correct);
+                continue;
+            }
+            
+            // For single words, try to use word boundaries for more precise replacement
+            let word_pattern = format!(r"\b{}\b", regex::escape(wrong));
+            if let Ok(re) = regex::Regex::new(&word_pattern) {
+                if re.is_match(&fixed) {
+                    println!("ACCENT FIX: Found '{}', replacing with '{}'", wrong, correct);
+                    fixed = re.replace_all(&fixed, *correct).to_string();
+                }
+            } else {
+                // Fallback if regex fails
+                fixed = fixed.replace(wrong, correct);
+            }
         }
+    }
+    
+    // Apply more aggressive Spanish verb accent restoration for past tense verbs
+    // This covers very common cases like "dur" -> "duró"
+    let past_tense_verbs_re = regex::Regex::new(r"\b([a-z]+)(r)\b").unwrap_or_else(|_| {
+        println!("WARNING: Failed to create past tense verb regex");
+        regex::Regex::new(r"unmatchable").unwrap()
+    });
+    
+    if past_tense_verbs_re.is_match(&fixed) {
+        println!("VERB CHECK: Found potential past tense verb(s) missing accents");
+        fixed = past_tense_verbs_re.replace_all(&fixed, |caps: &regex::Captures| {
+            // Only apply to short verbs (3-5 characters) to avoid false positives
+            let stem = &caps[1];
+            if stem.len() >= 2 && stem.len() <= 4 {
+                // Common past tense verb pattern in Spanish
+                format!("{}ó", stem)
+            } else {
+                // Return unchanged if not a likely candidate
+                caps[0].to_string()
+            }
+        }).to_string();
+    }
+    
+    // Give a summary of changes
+    if fixed != text {
+        println!("ACCENT RESTORATION: Fixed text: {}", fixed);
     }
     
     fixed
 }
 
 // Function to fix common Spanish phoneme issues
-fn fix_spanish_phonemes(phonemes: &str) -> String {
+pub fn fix_spanish_phonemes(phonemes: &str) -> String {
     println!("DEBUG: Fixing Spanish phonemes: {}", phonemes);
     let mut fixed = phonemes.to_string();
     
@@ -434,7 +547,17 @@ impl TTSKoko {
                 } else {
                     println!("Manual language: {} - No specific voice available, using: {}", language, style_name);
                 }
-                style_name.to_string()
+                // Check if the user's style is available
+                if !self.styles.contains_key(style_name) {
+                    println!("WARNING: Specified style '{}' not found in available voices", style_name);
+                    println!("Available voices: {:?}", self.styles.keys().collect::<Vec<_>>());
+                    // Fall back to a default voice we know exists - first voice in the list
+                    let fallback_style = self.styles.keys().next().unwrap().to_string();
+                    println!("Falling back to first available voice: {}", fallback_style);
+                    fallback_style
+                } else {
+                    style_name.to_string()
+                }
             }
         } else {
             // User has explicitly forced a specific style
@@ -443,31 +566,123 @@ impl TTSKoko {
             } else {
                 println!("Manual language mode: {} - User force-style: {}", language, style_name);
             }
-            style_name.to_string()
+            
+            // Check if the forced style exists
+            if !self.styles.contains_key(style_name) {
+                println!("WARNING: Forced style '{}' not found in available voices", style_name);
+                println!("Available voices: {:?}", self.styles.keys().collect::<Vec<_>>());
+                // Provide a fallback that we know exists - first voice in the list
+                let fallback_style = self.styles.keys().next().unwrap().to_string();
+                println!("Falling back to first available voice: {}", fallback_style);
+                fallback_style
+            } else {
+                style_name.to_string()
+            }
         };
 
         for chunk in chunks {
             // Convert chunk to phonemes using the determined language
             println!("Processing chunk with language: {}", language);
             
-            // For Spanish text, check if accents need to be fixed
-            let processed_chunk = if language.starts_with("es") {
-                // Check if we have encoding issues with Spanish characters
-                let has_missing_accents = chunk.contains("politica") || chunk.contains("poltica") || 
-                                          chunk.contains("Aqu") || chunk.contains("tecnologicas") ||
-                                          chunk.contains("publicas") || chunk.contains("creacin");
+            // Process the chunk to handle numbers and accents appropriately
+            let processed_chunk = {
+                // First, process numbers in the appropriate language
+                // Explicitly pre-normalize the text for numbers before phonemization
+                let mut processed = chunk.to_string();
                 
-                if has_missing_accents {
-                    println!("FIXING ACCENTS: Detected possible missing accents in Spanish text");
-                    let fixed = restore_spanish_accents(&chunk);
-                    println!("Original: {}", chunk);
-                    println!("After accent fix: {}", fixed);
-                    fixed
-                } else {
-                    chunk.to_string()
+                // Handle digits, numerals, etc.
+                if chunk.chars().any(|c| c.is_digit(10)) {
+                    // Apply number expansion functions from normalize.rs
+                    // We need to do some targeted number extraction and expansion
+                    
+                    // First, extract standalone number sequences
+                    let numbers_re = regex::Regex::new(r"\b\d+\b").unwrap();
+                    for number_match in numbers_re.find_iter(&chunk) {
+                        let number_str = number_match.as_str();
+                        let number_expansion = crate::tts::normalize::expand_number_for_tts(number_str, &language);
+                        
+                        // Replace directly in our processed string
+                        processed = processed.replace(number_str, &number_expansion);
+                    }
+                    
+                    // Handle decimals
+                    let decimal_re = regex::Regex::new(r"\d*\.\d+").unwrap();
+                    for decimal_match in decimal_re.find_iter(&chunk) {
+                        let decimal_str = decimal_match.as_str();
+                        let decimal_expansion = crate::tts::normalize::expand_decimal_for_tts(decimal_str, &language);
+                        
+                        // Replace directly in our processed string
+                        processed = processed.replace(decimal_str, &decimal_expansion);
+                    }
+                    
+                    // Convert "2023" to "two thousand twenty-three", etc.
+                    // We need to be careful about years that might be followed by words like "to"
+                    // First, check for years followed directly by "to" (without space)
+                    // This can happen due to preprocessing or text input issues
+                    let year_pattern = r"\b(19|20)\d{2}to\b";
+                    if let Ok(year_connected_re) = regex::Regex::new(year_pattern) {
+                        for connected_match in year_connected_re.find_iter(&chunk) {
+                            let connected_str = connected_match.as_str();
+                            // Split this into year and "to" to prevent it from being processed as one token
+                            if let Some(year_str) = connected_str.strip_suffix("to") {
+                                let year_expansion = crate::tts::normalize::expand_number_for_tts(year_str, &language);
+                                // Replace with proper spacing
+                                let replacement = format!("{} to", year_expansion);
+                                processed = processed.replace(connected_str, &replacement);
+                                println!("YEAR PATTERN: Fixed connected year-to pattern: '{}' -> '{}'", 
+                                         connected_str, replacement);
+                            }
+                        }
+                    } else {
+                        println!("WARNING: Error creating regex for year_pattern");
+                    }
+                    
+                    // Additionally, check for specific problematic patterns that commonly appear
+                    // Even with all our fixes, they might still show up
+                    for year in ["1939", "1940", "1941", "1942", "1945"] {
+                        // Fix "1939 to It" pattern where the capitalized "It" might still cause issues
+                        let error_pattern = format!("{} to It", year);
+                        if chunk.contains(&error_pattern) {
+                            // Replace with lowercase to prevent issues in TTS processing
+                            let fixed_pattern = format!("{} to it", year);
+                            processed = processed.replace(&error_pattern, &fixed_pattern);
+                            println!("YEAR PATTERN: Fixed capitalization issue: '{}' -> '{}'", 
+                                     error_pattern, fixed_pattern);
+                        }
+                    }
+                    
+                    // Now handle normal years
+                    let year_re = regex::Regex::new(r"\b(19|20)\d{2}\b").unwrap();
+                    for year_match in year_re.find_iter(&chunk) {
+                        let year_str = year_match.as_str();
+                        let year_expansion = crate::tts::normalize::expand_number_for_tts(year_str, &language);
+                        
+                        // Replace directly in our processed string
+                        processed = processed.replace(year_str, &year_expansion);
+                    }
+                    
+                    println!("NUMBER EXPANDED: '{}' -> '{}'", chunk, processed);
                 }
-            } else {
-                chunk.to_string()
+                
+                // Then, for Spanish text, check if accents need to be fixed
+                if language.starts_with("es") {
+                    // Check if we have encoding issues with Spanish characters
+                    let has_missing_accents = processed.contains("politica") || processed.contains("poltica") || 
+                                            processed.contains("Aqu") || processed.contains("tecnologicas") ||
+                                            processed.contains("publicas") || processed.contains("creacin");
+                    
+                    if has_missing_accents {
+                        println!("FIXING ACCENTS: Detected possible missing accents in Spanish text");
+                        let fixed = restore_spanish_accents(&processed);
+                        println!("Original: {}", processed);
+                        println!("After accent fix: {}", fixed);
+                        fixed
+                    } else {
+                        processed
+                    }
+                } else {
+                    processed
+                }
             };
             
             // Add more detailed logging for Spanish words
@@ -677,18 +892,38 @@ impl TTSKoko {
         // This method exists to provide a hook for proper cleanup
         println!("Cleaning up TTS engine resources...");
         
-        // Explicitly drop any resources that might cause issues at shutdown
-        // This helps prevent mutex issues with ONNX Runtime
+        // Give ONNX Runtime background threads time to complete any pending work
+        std::thread::sleep(std::time::Duration::from_millis(100));
         
-        // For the Arc<OrtKoko>, we'll try to ensure it's properly cleaned up
-        // by explicitly doing memory management here
-        let _ = std::sync::Arc::strong_count(&self.model);
+        // For the Arc<OrtKoko>, check if we're the only holder of the reference
+        let count = std::sync::Arc::strong_count(&self.model);
+        println!("Current reference count to ONNX model: {}", count);
+        
+        // If we're the only reference holder, we can try to explicitly drop it
+        if count == 1 {
+            // This is a hacky way to avoid the mutex error - create a block so the
+            // temporary cloned Arc will be dropped at the end of this scope
+            {
+                // Create a new reference then drop it to trigger proper cleanup
+                let _temp_clone = self.model.clone();
+                // Let it drop here
+            }
+            
+            // Give time for any mutex operations to complete
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         
         // Force a GC-like cleanup by allocating and dropping some memory
-        let _cleanup_buf = vec![0u8; 1024];
-        drop(_cleanup_buf);
+        {
+            let _cleanup_buf = vec![0u8; 4096];
+            // Drop it here
+        }
         
-        // Sleep briefly to let any background threads finish
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        // Sleep to let any background threads finish
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        
+        // Note: Unfortunately Rust doesn't give us explicit control over thread synchronization
+        // for the ONNX runtime internals. The best we can do is introduce these delays to
+        // reduce the likelihood of the mutex error.
     }
 }
