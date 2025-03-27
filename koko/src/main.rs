@@ -154,6 +154,16 @@ struct Cli {
         default_value_t = false
     )]
     auto_detect: bool,
+    
+    /// Override style selection when using auto-detect
+    /// When enabled with auto-detect, this will use the specified style
+    /// instead of automatically selecting a language-appropriate style
+    #[arg(
+        long = "force-style",
+        value_name = "FORCE_STYLE",
+        default_value_t = false
+    )]
+    force_style: bool,
 
     /// Path to the Kokoro v1.0 ONNX model on the filesystem
     #[arg(
@@ -236,6 +246,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Cli {
             lan,
             auto_detect,
+            force_style,
             model_path,
             data_path,
             style,
@@ -264,6 +275,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         txt: stripped_line,
                         lan: &lan,
                         auto_detect_language: auto_detect,
+                        force_style,
                         style_name: &style,
                         save_path: &save_path,
                         mono,
@@ -279,6 +291,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     txt: &text,
                     lan: &lan,
                     auto_detect_language: auto_detect,
+                    force_style,
                     style_name: &style,
                     save_path: &save_path,
                     mono,
@@ -327,7 +340,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     // Process the line and get audio data
-                    match tts.tts_raw_audio(&stripped_line, &lan, &style, speed, initial_silence, auto_detect) {
+                    match tts.tts_raw_audio(&stripped_line, &lan, &style, speed, initial_silence, auto_detect, force_style) {
                         Ok(raw_audio) => {
                             // Write the raw audio samples directly
                             write_audio_chunk(&mut stdout, &raw_audio)?;
@@ -397,7 +410,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 eprintln!("Processing sentence: {}", sentence);
 
                                 let audio_chunk = tts
-                                    .tts_raw_audio(sentence, &lan, &style, speed, initial_silence, auto_detect)
+                                    .tts_raw_audio(sentence, &lan, &style, speed, initial_silence, auto_detect, force_style)
                                     .map_err(|e| {
                                         eprintln!("Error generating audio for sentence: {}", e);
                                         e
@@ -425,7 +438,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !buffer.trim().is_empty() {
                     eprintln!("Processing final text: {}", buffer.trim());
                     let audio_chunk =
-                        tts.tts_raw_audio(&buffer, &lan, &style, speed, initial_silence, auto_detect)?;
+                        tts.tts_raw_audio(&buffer, &lan, &style, speed, initial_silence, auto_detect, force_style)?;
                     tx.send(audio_chunk.clone())?;
                     write_audio_chunk(&mut wav_file, &audio_chunk)?;
                     wav_file.flush()?;
