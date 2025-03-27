@@ -258,7 +258,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let tts = TTSKoko::new(&model_path, &data_path).await;
 
-        match mode {
+        match &mode {
             Mode::File {
                 input_path,
                 save_path_format,
@@ -303,17 +303,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     text.split_whitespace().count() as f32 / s.elapsed().as_secs_f32();
                 println!("Words per second: {:.2}", words_per_second);
                 
-                // Force immediate exit to avoid segfault
+                // Clean up ONNX resources before exit
                 // This is a workaround for ONNX Runtime's mutex issues at program exit
+                tts.cleanup();
+                
+                // Sleep briefly to allow resource cleanup
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                
+                // Force immediate exit to avoid segfault
                 std::process::exit(0);
             }
 
             Mode::OpenAI { ip, port } => {
-                let app = kokoros_openai::create_server(tts).await;
-                let addr = SocketAddr::from((ip, port));
+                let app = kokoros_openai::create_server(tts.clone()).await;
+                let addr = SocketAddr::from((*ip, *port));
                 let binding = tokio::net::TcpListener::bind(&addr).await?;
                 println!("Starting OpenAI-compatible HTTP server on {addr}");
                 kokoros_openai::serve(binding, app.into_make_service()).await?;
+                
+                // Clean up resources before exit
+                tts.cleanup();
             }
 
             Mode::Stream => {
@@ -462,6 +471,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        // In all modes except OpenAI (which has its own cleanup),
+        // clean up resources before exit
+        let is_openai_mode = match &mode {
+            Mode::OpenAI { .. } => true,
+            _ => false
+        };
+        
+        if !is_openai_mode {
+            tts.cleanup();
+            
+            // Sleep briefly to allow ONNX resources to be cleaned up
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        
         // Force clean exit to avoid segfault
         // This is a workaround for ONNX Runtime's mutex issues
         std::process::exit(0);
