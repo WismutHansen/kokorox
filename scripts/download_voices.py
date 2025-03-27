@@ -121,6 +121,7 @@ def main():
     group.add_argument("--model", action="store_true", help="Download only the model file")
     group.add_argument("--voices", action="store_true", help="Download only the voices data file")
     group.add_argument("--list-languages", action="store_true", help="List supported languages")
+    parser.add_argument("--no-tip", action="store_true", help="Don't show additional tips")
     
     args = parser.parse_args()
     
@@ -150,6 +151,22 @@ def main():
     print("You can now build and run Kokoros:")
     print("  cargo build --release")
     print("  ./target/release/koko -h")
+    
+    # Show additional tips about PT voice conversion
+    if not args.no_tip:
+        print("\n===============================================================================")
+        print("TIP: Get more voices from Hugging Face!")
+        print("===============================================================================")
+        print("The original Kokoro model on Hugging Face has many more voices (54 voices in 8 languages)")
+        print("that you can download and convert for use with Kokoros.")
+        print("\nTo access these additional voices, use the convert_pt_voices.py script:")
+        print("  python scripts/convert_pt_voices.py --list-languages")
+        print("  python scripts/convert_pt_voices.py --list-voices en")
+        print("  python scripts/convert_pt_voices.py --all")
+        print("\nThis will download, convert, and combine all available voices into a custom voices file")
+        print("that you can use with Kokoros by specifying the -d parameter:")
+        print("  ./target/release/koko -d data/voices-custom.bin text \"Your text here\"")
+        print("===============================================================================")
 
 
 if __name__ == "__main__":

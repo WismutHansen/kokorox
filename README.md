@@ -111,6 +111,42 @@ Use the `--auto-detect` or `-a` flag to automatically detect the language:
 
 The language detection is powered by the `whatlang` library and supports a wide range of languages.
 
+### Additional Voices
+
+The default installation includes a limited set of voices. However, you can access the full set of voices (54 voices across 8 languages) from the original Kokoro model on Hugging Face.
+
+#### Downloading and converting additional voices
+
+```bash
+# List available languages
+python scripts/convert_pt_voices.py --list-languages
+
+# List voices for a specific language
+python scripts/convert_pt_voices.py --list-voices en
+
+# Download, convert, and combine all voices (recommended)
+python scripts/convert_pt_voices.py --all
+
+# Or perform steps individually
+python scripts/convert_pt_voices.py --download-all
+python scripts/convert_pt_voices.py --convert-all
+python scripts/convert_pt_voices.py --combine
+```
+
+#### Using custom voices
+
+After converting the voices, you can use them by specifying the custom voices file:
+
+```bash
+./target/release/koko -d data/voices-custom.bin text "Your text here"
+```
+
+You can also combine automatic language detection with custom voices:
+
+```bash
+./target/release/koko -a -d data/voices-custom.bin text "Multilingual text here"
+```
+
 ### Generate speech for each line in a file
 
 ```
