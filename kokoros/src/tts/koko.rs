@@ -52,6 +52,115 @@ impl Default for InitConfig {
     }
 }
 
+// Function to restore accents in Spanish text
+fn restore_spanish_accents(text: &str) -> String {
+    let mut fixed = text.to_string();
+    
+    // Common Spanish words with accents that might be lost
+    let replacements = [
+        ("politica", "política"),
+        ("poltica", "política"),
+        ("Politica", "Política"),
+        ("Poltica", "Política"),
+        
+        ("aqu", "aquí"),
+        ("Aqu", "Aquí"),
+        
+        ("tecnologicas", "tecnológicas"),
+        ("tecnologicos", "tecnológicos"),
+        ("tecnologia", "tecnología"),
+        
+        ("publicas", "públicas"),
+        ("publicos", "públicos"),
+        ("publico", "público"),
+        
+        ("creacion", "creación"),
+        ("creacin", "creación"),
+        
+        ("electronica", "electrónica"),
+        ("electronico", "electrónico"),
+        
+        ("electronico", "electrónico"),
+        ("electrica", "eléctrica"),
+        ("electrico", "eléctrico"),
+        
+        ("musica", "música"),
+        ("economico", "económico"),
+        ("economica", "económica"),
+        
+        ("practico", "práctico"),
+        ("practica", "práctica"),
+        
+        ("telefono", "teléfono"),
+        ("telefonos", "teléfonos"),
+        
+        ("metodo", "método"),
+        ("metodos", "métodos"),
+        
+        ("polemica", "polémica"),
+        ("polemico", "polémico"),
+        
+        ("ultimo", "último"),
+        ("ultimos", "últimos"),
+        
+        ("medico", "médico"),
+        ("medica", "médica"),
+        
+        // These are the most common, add more as needed
+        ("el.", "él."),
+        ("el,", "él,"),
+        ("el?", "él?"),
+        ("el!", "él!"),
+        (" el ", " él "),
+        
+        ("mas ", "más "),
+        ("esta ", "está "),
+        ("este ", "esté "),
+        ("si ", "sí "),
+        ("tu ", "tú "),
+        ("mi ", "mí "),
+        
+        ("innovacion", "innovación"),
+        ("informacion", "información"),
+        ("comunicacion", "comunicación"),
+        ("educacion", "educación"),
+        ("investigacion", "investigación"),
+        ("explicacion", "explicación"),
+        ("presentacion", "presentación"),
+        ("decoracion", "decoración"),
+        ("situacion", "situación"),
+        ("generacion", "generación"),
+        ("participacion", "participación"),
+        ("poblacion", "población"),
+        ("aplicacion", "aplicación"),
+        ("relacion", "relación"),
+        ("organizacion", "organización"),
+        ("celebracion", "celebración"),
+        ("comunicacin", "comunicación"),
+        
+        // Words with ñ
+        ("compania", "compañía"),
+        ("compani", "compañí"),
+        ("Compania", "Compañía"),
+        ("Compaa", "Compañía"),
+        ("Espana", "España"),
+        ("espanol", "español"),
+        
+        // Words with ü
+        ("linguistica", "lingüística"),
+        ("bilinguismo", "bilingüismo"),
+        ("pinguino", "pingüino"),
+    ];
+    
+    for (wrong, correct) in replacements.iter() {
+        if fixed.contains(wrong) {
+            fixed = fixed.replace(wrong, correct);
+        }
+    }
+    
+    fixed
+}
+
 // Function to fix common Spanish phoneme issues
 fn fix_spanish_phonemes(phonemes: &str) -> String {
     println!("DEBUG: Fixing Spanish phonemes: {}", phonemes);
@@ -341,12 +450,32 @@ impl TTSKoko {
             // Convert chunk to phonemes using the determined language
             println!("Processing chunk with language: {}", language);
             
+            // For Spanish text, check if accents need to be fixed
+            let processed_chunk = if language.starts_with("es") {
+                // Check if we have encoding issues with Spanish characters
+                let has_missing_accents = chunk.contains("politica") || chunk.contains("poltica") || 
+                                          chunk.contains("Aqu") || chunk.contains("tecnologicas") ||
+                                          chunk.contains("publicas") || chunk.contains("creacin");
+                
+                if has_missing_accents {
+                    println!("FIXING ACCENTS: Detected possible missing accents in Spanish text");
+                    let fixed = restore_spanish_accents(&chunk);
+                    println!("Original: {}", chunk);
+                    println!("After accent fix: {}", fixed);
+                    fixed
+                } else {
+                    chunk.to_string()
+                }
+            } else {
+                chunk.to_string()
+            };
+            
             // Add more detailed logging for Spanish words
             if language.starts_with("es") {
-                println!("Spanish text to phonemize: {}", chunk);
+                println!("Spanish text to phonemize: {}", processed_chunk);
             }
             
-            let mut phonemes = text_to_phonemes(&chunk, &language, None, true, false)
+            let mut phonemes = text_to_phonemes(&processed_chunk, &language, None, true, false)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
                 .join("");
             
