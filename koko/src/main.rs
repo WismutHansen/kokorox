@@ -236,13 +236,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::abort();
     }));
     
-    // Set up SIGTERM/SIGINT handlers
-    // This ensures we can do clean shutdown
-    let term = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let term_clone = term.clone();
+    // Set up SIGTERM/SIGINT handlers for immediate exit
     ctrlc::set_handler(move || {
-        term_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-        println!("Received termination signal, shutting down gracefully...");
+        println!("Received termination signal, exiting immediately.");
+        std::process::exit(0); // Exit immediately on Ctrl+C
     }).expect("Error setting Ctrl-C handler");
     
     let rt = tokio::runtime::Runtime::new()?;
@@ -407,18 +404,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Add to our text buffer
                     buffer.push_str(&line);
                     
-                    // If we haven't detected language yet and have enough text, do it now
-                    if !language_detected && buffer.len() > 60 {
-                        eprintln!("Detecting language from initial text...");
-                        
-                        // Detect language if auto-detect is enabled
-                        if auto_detect {
+                    // Only run language detection if we haven't detected yet and auto-detect is enabled
+                    if !language_detected {
+                        if auto_detect && buffer.len() > 60 {
+                            // Only perform language detection when auto_detect is true
+                            eprintln!("Auto-detecting language from initial text...");
+                            
                             if let Some(detected) = kokoros::tts::phonemizer::detect_language(&buffer) {
                                 eprintln!("Detected language: {}", detected);
                                 session_language = detected;
                             } else {
                                 eprintln!("Language detection failed, using specified: {}", lan);
                             }
+                        } else {
+                            // With auto_detect disabled, just use the specified language
+                            eprintln!("Using specified language: {}", lan);
                         }
                         
                         // Select appropriate voice style if not forcing a specific one
