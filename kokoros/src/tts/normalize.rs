@@ -28,6 +28,19 @@ lazy_static! {
 }
 
 pub fn normalize_text(text: &str) -> String {
+    // Debug logging for Spanish text with special characters
+    if text.contains('ñ') || text.contains('á') || text.contains('é') || 
+       text.contains('í') || text.contains('ó') || text.contains('ú') || 
+       text.contains('ü') {
+        println!("NORMALIZE DEBUG: Text before normalization: {}", text);
+        // Print each special character
+        for (i, c) in text.char_indices() {
+            if !c.is_ascii() {
+                println!("  Before normalization - Pos {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+            }
+        }
+    }
+    
     let mut text = text.to_string();
 
     // Replace special quotes and brackets
@@ -66,6 +79,21 @@ pub fn normalize_text(text: &str) -> String {
         .replace_all(&text, |caps: &regex::Captures| caps[0].replace('.', "-"))
         .to_string();
     text = ACRONYM_RE.replace_all(&text, "-").to_string();
-
-    text.trim().to_string()
+    
+    let result = text.trim().to_string();
+    
+    // Debug logging for Spanish text with special characters after normalization
+    if result.contains('ñ') || result.contains('á') || result.contains('é') || 
+       result.contains('í') || result.contains('ó') || result.contains('ú') || 
+       result.contains('ü') {
+        println!("NORMALIZE DEBUG: Text after normalization: {}", result);
+        // Print each special character
+        for (i, c) in result.char_indices() {
+            if !c.is_ascii() {
+                println!("  After normalization - Pos {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+            }
+        }
+    }
+    
+    result
 }

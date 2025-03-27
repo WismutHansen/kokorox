@@ -532,6 +532,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 text_to_process.clone() 
                             });
                         
+                        // Debug log for Spanish special characters
+                        if session_language.starts_with("es") {
+                            let contains_special = text_to_process.contains('ñ') || 
+                                                  text_to_process.contains('á') || 
+                                                  text_to_process.contains('é') || 
+                                                  text_to_process.contains('í') || 
+                                                  text_to_process.contains('ó') || 
+                                                  text_to_process.contains('ú') || 
+                                                  text_to_process.contains('ü');
+                            if contains_special {
+                                eprintln!("DEBUG SPANISH CHARS: Found special characters in text");
+                                for (i, c) in text_to_process.char_indices() {
+                                    if !c.is_ascii() {
+                                        eprintln!("  Pos {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                                    }
+                                }
+                                eprintln!("Raw text with special chars: {}", text_to_process);
+                            }
+                        }
+                        
                         // Generate audio with consistent language/voice
                         match tts.tts_raw_audio(
                             &text_to_process,

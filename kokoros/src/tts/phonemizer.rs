@@ -493,11 +493,37 @@ impl Phonemizer {
     }
 
     pub fn phonemize(&self, text: &str, normalize: bool) -> String {
+        // Log Spanish special characters before normalization
+        if self.lang.starts_with("es") && (text.contains('ñ') || text.contains('á') || 
+           text.contains('é') || text.contains('í') || text.contains('ó') || 
+           text.contains('ú') || text.contains('ü')) {
+            println!("PHONEMIZER DEBUG: Spanish text before normalization: {}", text);
+            // Print each special character and its Unicode code point
+            for (i, c) in text.char_indices() {
+                if !c.is_ascii() {
+                    println!("  Before norm - Pos {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                }
+            }
+        }
+        
         let text = if normalize {
             normalize::normalize_text(text)
         } else {
             text.to_string()
         };
+        
+        // Log Spanish special characters after normalization
+        if self.lang.starts_with("es") && (text.contains('ñ') || text.contains('á') || 
+           text.contains('é') || text.contains('í') || text.contains('ó') || 
+           text.contains('ú') || text.contains('ü')) {
+            println!("PHONEMIZER DEBUG: Spanish text after normalization: {}", text);
+            // Print each special character and its Unicode code point
+            for (i, c) in text.char_indices() {
+                if !c.is_ascii() {
+                    println!("  After norm - Pos {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                }
+            }
+        }
 
         // Use espeak-rs directly for phonemization
         let phonemes = match text_to_phonemes(
