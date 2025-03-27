@@ -115,7 +115,7 @@ async fn handle_tts(
     }): Json<SpeechRequest>,
 ) -> Result<Response, SpeechError> {
     let raw_audio = tts
-        .tts_raw_audio(&input, "en-us", &voice, speed, initial_silence)
+        .tts_raw_audio(&input, "en-us", &voice, speed, initial_silence, false)
         .map_err(SpeechError::Koko)?;
 
     let sample_rate = TTSKokoInitConfig::default().sample_rate;
