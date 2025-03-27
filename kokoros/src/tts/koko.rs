@@ -475,9 +475,30 @@ impl TTSKoko {
                 println!("Spanish text to phonemize: {}", processed_chunk);
             }
             
+            // Check if processed chunk has accented characters before phonemization
+            if processed_chunk.contains('á') || processed_chunk.contains('é') || 
+               processed_chunk.contains('í') || processed_chunk.contains('ó') || 
+               processed_chunk.contains('ú') || processed_chunk.contains('ñ') {
+                println!("PRE-PHONEMIZE: Text has accented characters");
+                // Show each accented character
+                for (i, c) in processed_chunk.char_indices() {
+                    if !c.is_ascii() {
+                        println!("  Accent at {}: '{}' (U+{:04X})", i, c, c as u32);
+                    }
+                }
+            }
+            
+            // This is where the phonemization happens - a potential point of accent loss
+            println!("CALLING PHONEMIZE ON: {}", processed_chunk);
             let mut phonemes = text_to_phonemes(&processed_chunk, &language, None, true, false)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
+                .map_err(|e| {
+                    println!("PHONEMIZE ERROR: {}", e);
+                    Box::new(e) as Box<dyn std::error::Error>
+                })?
                 .join("");
+                
+            // Check what happened to the accented characters
+            println!("PHONEMIZE RESULT: {}", phonemes);
             
             // Apply Spanish-specific phoneme corrections
             if language.starts_with("es") {
