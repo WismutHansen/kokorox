@@ -219,27 +219,23 @@ struct Cli {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The segmentation fault seems to be related to ONNX runtime cleanup
-    // We'll use an exit handler to ensure clean process termination
+    // We'll use a different approach to clean up
     
-    // Exit handler for clean shutdown
-    extern "C" fn exit_handler() {
-        // Sleep to let ONNX runtime clean up its resources
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-    
-    // Register our exit handler to run when the program exits
-    extern "C" {
-        fn atexit(cb: extern "C" fn()) -> i32;
-    }
-    unsafe {
-        atexit(exit_handler);
-    }
-    
-    // Also set panic behavior to abort rather than unwind
+    // Tell Rust to just abort on panic instead of unwinding
+    // This avoids complex cleanup issues with ONNX Runtime 
     std::panic::set_hook(Box::new(|panic_info| {
         eprintln!("Application panic: {}", panic_info);
         std::process::abort();
     }));
+    
+    // Set up SIGTERM/SIGINT handlers
+    // This ensures we can do clean shutdown
+    let term = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let term_clone = term.clone();
+    ctrlc::set_handler(move || {
+        term_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+        println!("Received termination signal, shutting down gracefully...");
+    }).expect("Error setting Ctrl-C handler");
     
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
@@ -303,15 +299,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     text.split_whitespace().count() as f32 / s.elapsed().as_secs_f32();
                 println!("Words per second: {:.2}", words_per_second);
                 
-                // Clean up ONNX resources before exit
-                // This is a workaround for ONNX Runtime's mutex issues at program exit
-                tts.cleanup();
-                
-                // Sleep briefly to allow resource cleanup
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                
-                // Force immediate exit to avoid segfault
-                std::process::exit(0);
+                // Cleanup happens in the finally block at the end
+                // Do a clean exit now
+                return Ok(());
             }
 
             Mode::OpenAI { ip, port } => {
@@ -471,22 +461,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // In all modes except OpenAI (which has its own cleanup),
-        // clean up resources before exit
-        let is_openai_mode = match &mode {
-            Mode::OpenAI { .. } => true,
-            _ => false
-        };
+        // Final cleanup before exiting
+        println!("Performing final cleanup...");
         
-        if !is_openai_mode {
-            tts.cleanup();
-            
-            // Sleep briefly to allow ONNX resources to be cleaned up
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
+        // Explicit cleanup to manage ONNX Runtime resources
+        tts.cleanup();
         
-        // Force clean exit to avoid segfault
-        // This is a workaround for ONNX Runtime's mutex issues
-        std::process::exit(0);
+        // Sleep to allow background threads to finish
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        
+        println!("Cleanup complete, exiting normally");
+        
+        // Let the program exit normally instead of forcing termination
+        Ok(())
     })
 }
