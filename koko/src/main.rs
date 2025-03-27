@@ -375,8 +375,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut session_language = lan.clone();
                 let mut session_style = style.clone();
                 
-                // Flag to track if we've done language detection
+                // Initialize language detection state.
+                // If auto_detect is false, language is already "detected" (we're using the specified one)
+                // If auto_detect is true, we need to perform detection
                 let mut language_detected = !auto_detect;
+                
+                // Print language selection mode clearly
+                if auto_detect {
+                    eprintln!("AUTO-DETECT MODE: Will determine language from text input");
+                    eprintln!("Note: -l flag will only be used as fallback if detection fails");
+                } else {
+                    eprintln!("MANUAL LANGUAGE MODE: Using specified language: {}", lan);
+                }
 
                 // Also create a WAV file to write the output.
                 let mut wav_file = std::fs::File::create(&output_path)?;

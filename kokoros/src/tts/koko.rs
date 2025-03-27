@@ -283,15 +283,20 @@ impl TTSKoko {
         let chunks = self.split_text_into_chunks(txt, 500); // Using 500 to leave 12 tokens of margin
         let mut final_audio = Vec::new();
 
-        // Determine language - only auto-detect if requested
+        // Determine language to use
         let language = if auto_detect_language {
-            println!("Auto-detecting language...");
-            detect_language(txt).unwrap_or_else(|| {
-                println!("Language detection failed, falling back to: {}", lan);
+            // Only detect language when auto-detect flag is enabled
+            println!("Attempting language detection for input text...");
+            if let Some(detected) = detect_language(txt) {
+                println!("Detected language: {} (confidence is good)", detected);
+                detected
+            } else {
+                println!("Language detection failed, falling back to specified language: {}", lan);
                 lan.to_string()
-            })
+            }
         } else {
-            // Skip detection entirely when a language is manually specified
+            // Skip detection entirely when auto-detect is disabled
+            // Just use the language specified with -l flag
             println!("Using manually specified language: {}", lan);
             lan.to_string()
         };
