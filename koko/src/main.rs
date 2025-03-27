@@ -411,6 +411,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                     
+                    // Debug the raw bytes received
+                    eprintln!("RAW INPUT DEBUG: Received {} bytes", bytes_read);
+                    
+                    // Check common problem characters
+                    if line.contains("poltica") || line.contains("politica") {
+                        eprintln!("ENCODING DEBUG: Found 'poltica/politica' - might be missing 'í'");
+                        eprintln!("Line: {}", line);
+                        eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
+                    }
+                    
+                    if line.contains("Aqu") || line.contains("aqu") {
+                        eprintln!("ENCODING DEBUG: Found 'Aqu/aqu' - might be missing 'í'");
+                        eprintln!("Line: {}", line);
+                        eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
+                    }
+                    
+                    if line.contains("comunicacin") || line.contains("comunicacion") {
+                        eprintln!("ENCODING DEBUG: Found 'comunicacion' - might be missing 'ó'");
+                        eprintln!("Line: {}", line);
+                        eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
+                    }
+                    
+                    // Print diagnostic info for every line received
+                    eprintln!("TEXT RECEIVED: {}", line.trim());
+                    eprintln!("ENCODING CHECK: UTF-8 valid: {}", String::from_utf8(line.clone().into_bytes()).is_ok());
+                    
+                    // Check specifically for Spanish characters that should have accents
+                    let spanish_words = [
+                        ("poltica", "política"),
+                        ("politica", "política"),
+                        ("aqu", "aquí"),
+                        ("Aqu", "Aquí"),
+                        ("comunicacion", "comunicación"),
+                        ("informacion", "información"),
+                        ("educacion", "educación")
+                    ];
+                    
+                    for (incorrect, correct) in spanish_words.iter() {
+                        if line.contains(incorrect) {
+                            eprintln!("ACCENT MISSING: Found '{}', should be '{}'", incorrect, correct);
+                        }
+                    }
+                    
                     // Add to our text buffer
                     buffer.push_str(&line);
                     
