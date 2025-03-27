@@ -12,10 +12,11 @@ Languge support:
 
 - [x] English;
 - [x] Chinese (partly);
+- [x] Spanish (partly);
 - [x] Japanese (partly);
 - [x] German (partly);
 
-> 🔥🔥🔥🔥🔥🔥🔥🔥🔥 Kokoros Rust version just got a lot attention now. If you also interested in insanely fast inference, embeded build, wasm support etc, please star this repo! We are keep updating it.
+> Kokoros Rust version just got a lot attention now. If you also interested in insanely fast inference, embeded build, wasm support etc, please star this repo! We are keep updating it.
 
 New Discord community: <https://discord.gg/E566zfDWqD>, Please join us if you interested in Rust Kokoro.
 
@@ -35,6 +36,7 @@ New Discord community: <https://discord.gg/E566zfDWqD>, Please join us if you in
 1. Install required dependencies:
 
    **System Dependencies:**
+
    - **Ubuntu/Debian**: `sudo apt-get install espeak-ng libespeak-ng-dev`
    - **macOS**: `brew install espeak-ng`
    - **Windows**: Install espeak-ng from [the official repository](https://github.com/espeak-ng/espeak-ng/releases)

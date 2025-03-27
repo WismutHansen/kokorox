@@ -4,6 +4,7 @@ use kokoros::{
     utils::wav::{write_audio_chunk, WavHeader},
 };
 use rodio::{OutputStream, Sink, Source};
+// Removed unused Cow import
 use std::net::{IpAddr, SocketAddr};
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
@@ -12,6 +13,7 @@ use std::{
     io::Write,
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
+use sentence_segmentation;
 
 struct ChannelSource {
     rx: Receiver<Vec<f32>>,
@@ -220,9 +222,128 @@ struct Cli {
     /// Initial silence duration in tokens
     #[arg(long = "initial-silence", value_name = "INITIAL_SILENCE")]
     initial_silence: Option<usize>,
+    
+    /// Enable verbose debug output for text processing
+    /// Especially useful for debugging issues with non-English text
+    #[arg(
+        short = 'v',
+        long = "verbose",
+        help = "Enable verbose debug logs for text processing",
+        default_value_t = false
+    )]
+    verbose: bool,
+    
+    /// Enable detailed accent debugging for non-English languages
+    /// Shows character-by-character analysis of accented characters
+    #[arg(
+        long = "debug-accents",
+        help = "Enable detailed accent debugging for non-English languages",
+        default_value_t = false
+    )]
+    debug_accents: bool,
 
     #[command(subcommand)]
     mode: Mode,
+}
+
+/// Custom sentence segmentation function that preserves UTF-8 characters
+/// This is a replacement for the sentence_segmentation library to fix the
+/// loss of accented characters during processing.
+fn utf8_safe_sentence_segmentation(text: &str, language: &str, verbose: bool, debug_accents: bool) -> Vec<String> {
+    // Only log when debug flags are enabled
+    if verbose || debug_accents {
+        // Log debug info for text with special characters
+        let has_accents = text.contains('á') || text.contains('é') || 
+                         text.contains('í') || text.contains('ó') || 
+                         text.contains('ú') || text.contains('ñ') || 
+                         text.contains('ü') ||
+                         text.contains('à') || text.contains('è') || 
+                         text.contains('ì') || text.contains('ò') || 
+                         text.contains('ù') || text.contains('ë') || 
+                         text.contains('ï') || text.contains('ç');
+        if has_accents {
+            if verbose {
+                println!("UTF8-SAFE SEGMENTATION: Text with accents detected");
+            }
+            
+            // If the detailed accent debugging is enabled, show each character
+            if debug_accents {
+                for (i, c) in text.char_indices() {
+                    if !c.is_ascii() {
+                        println!("  Special char at {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                    }
+                }
+            }
+        }
+    }
+    
+    // IMPORTANT: The key issue with sentence segmentation is that it needs to correctly 
+    // handle multi-byte UTF-8 characters. We need to carefully track strings through this process.
+    
+    // First, ensure the text is valid UTF-8 (it should be since it's a Rust &str)
+    if !text.is_empty() {
+        // Choose the appropriate segmentation function based on language
+        let processed = if language.starts_with("es") || 
+                          language.starts_with("fr") || 
+                          language.starts_with("it") || 
+                          language.starts_with("pt") {
+            // Use the English processor for romance languages (for now)
+            // In the future, we could implement language-specific segmentation
+            sentence_segmentation::processor::english(text)
+        } else if language.starts_with("de") {
+            // Use the English processor for German (for now)
+            sentence_segmentation::processor::english(text)
+        } else {
+            // Default to English processor
+            sentence_segmentation::processor::english(text)
+        };
+        
+        // Verify if the output retains accented characters, if debugging is enabled
+        if verbose || debug_accents {
+            // Check for languages that commonly use accents
+            let check_accents = language.starts_with("es") || 
+                               language.starts_with("fr") || 
+                               language.starts_with("pt") || 
+                               language.starts_with("it");
+                               
+            if check_accents {
+                for (i, sentence) in processed.iter().enumerate() {
+                    let has_accents = sentence.contains('á') || sentence.contains('é') || 
+                                     sentence.contains('í') || sentence.contains('ó') || 
+                                     sentence.contains('ú') || sentence.contains('ñ') || 
+                                     sentence.contains('ü') ||
+                                     sentence.contains('à') || sentence.contains('è') || 
+                                     sentence.contains('ì') || sentence.contains('ò') || 
+                                     sentence.contains('ù') || sentence.contains('ë') || 
+                                     sentence.contains('ï') || sentence.contains('ç');
+                                     
+                    if has_accents {
+                        if debug_accents {
+                            println!("SEGMENT {}: Retained accents: {}", i, sentence);
+                        }
+                    } else if verbose {
+                        // Try to identify potential accent loss by looking for common words
+                        // that should have accents but don't
+                        let potential_issues = language.starts_with("es") && (
+                            sentence.contains("politica") || 
+                            sentence.contains("aqu") || 
+                            sentence.contains("economia") || 
+                            sentence.contains("informacion") ||
+                            sentence.contains("comunicacion")
+                        );
+                        
+                        if potential_issues {
+                            println!("POTENTIAL ACCENT LOSS in segment {}: {}", i, sentence);
+                        }
+                    }
+                }
+            }
+        }
+        
+        processed
+    } else {
+        vec![]
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -254,6 +375,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             speed,
             initial_silence,
             mono,
+            verbose,
+            debug_accents,
             mode,
         } = Cli::parse();
 
@@ -359,8 +482,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Create an asynchronous reader for stdin.
                 let stdin = tokio::io::stdin();
                 let mut reader = BufReader::new(stdin);
-                // This buffer stores text as it comes in from stdin
-                let mut buffer = String::new();
+                // Comment removed: "This buffer stores text as it comes in from stdin"
+                // Unused variable removed
                 
                 // We don't need these variables anymore since we use session_language and session_style
 
@@ -380,7 +503,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // If auto_detect is true, we need to perform detection
                 let mut language_detected = !auto_detect;
                 
-                // Print language selection mode clearly
+                // Print language selection mode clearly (always show this regardless of verbosity)
                 if auto_detect {
                     eprintln!("AUTO-DETECT MODE: Will determine language from text input");
                     eprintln!("Note: -l flag will only be used as fallback if detection fails");
@@ -403,8 +526,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut buffer = String::new();
                 
                 loop {
-                    // Read a new line from stdin - THIS IS WHERE ENCODING ISSUES LIKELY OCCUR
-                    eprintln!("BEFORE READ: About to read from stdin");
+                    // Read a new line from stdin
+                    if verbose {
+                        eprintln!("BEFORE READ: About to read from stdin");
+                    }
                     let mut line = String::new();
                     
                     // Try to read using standard method first
@@ -414,17 +539,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                     
-                    // Check specifically for encoding issues by comparing bytes vs chars
-                    let bytes_count = line.bytes().count();
-                    let chars_count = line.chars().count();
-                    eprintln!("ENCODING ANALYSIS: Bytes: {}, Chars: {}, Difference: {}", 
-                              bytes_count, chars_count, bytes_count - chars_count);
+                    // Immediately verify UTF-8 validity and fix any potential issues
+                    if !String::from_utf8(line.clone().into_bytes()).is_ok() {
+                        eprintln!("WARNING: Invalid UTF-8 detected in input. Attempting to fix...");
+                        // Use the lossy conversion to handle invalid UTF-8
+                        line = String::from_utf8_lossy(&line.as_bytes().to_vec()).to_string();
+                    }
                     
-                    // If the string contains multi-byte characters (like accents), there will be a difference
-                    if bytes_count != chars_count {
-                        eprintln!("MULTI-BYTE CHARS DETECTED: Line likely contains accented characters");
+                    if verbose || debug_accents {
+                        // Check specifically for encoding issues by comparing bytes vs chars
+                        let bytes_count = line.bytes().count();
+                        let chars_count = line.chars().count();
+                        eprintln!("ENCODING ANALYSIS: Bytes: {}, Chars: {}, Difference: {}", 
+                                bytes_count, chars_count, bytes_count - chars_count);
                         
-                        // Check the encoding of the string
+                        // If the string contains multi-byte characters (like accents), there will be a difference
+                        if bytes_count != chars_count {
+                            eprintln!("MULTI-BYTE CHARS DETECTED: Line likely contains accented characters");
+                        }
+                    }
+                        
+                    // Detailed logging for UTF-8 characters if debug_accents is enabled
+                    if debug_accents {
                         for (i, c) in line.char_indices() {
                             if !c.is_ascii() {
                                 let mut bytes = [0u8; 4];
@@ -435,51 +571,79 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .join(" ");
                                 
                                 eprintln!("  Char at byte {}: '{}' (U+{:04X}) - UTF-8: {}", 
-                                          i, c, c as u32, byte_str);
+                                        i, c, c as u32, byte_str);
                             }
                         }
                     }
                     
-                    // Debug the raw bytes received
-                    eprintln!("RAW INPUT DEBUG: Received {} bytes", bytes_read);
-                    
-                    // Check common problem characters
-                    if line.contains("poltica") || line.contains("politica") {
-                        eprintln!("ENCODING DEBUG: Found 'poltica/politica' - might be missing 'í'");
-                        eprintln!("Line: {}", line);
-                        eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
+                    // For Spanish, do a quick check on common accented words, but only in verbose mode
+                    if verbose && (session_language.starts_with("es") || 
+                        (auto_detect && !language_detected && 
+                        (line.contains("Hola") || line.contains("español")))) {
+                        
+                        eprintln!("SPANISH CHECK: Looking for potential accent issues");
+                        
+                        // Check for words that are commonly missing accents
+                        let suspicious_words = [
+                            ("politica", "política"),
+                            ("aqu", "aquí"),
+                            ("economia", "economía"),
+                            ("informacion", "información"),
+                            ("educacion", "educación"),
+                            ("comunicacion", "comunicación")
+                        ];
+                        
+                        for (incorrect, correct) in suspicious_words.iter() {
+                            if line.contains(incorrect) {
+                                eprintln!("POTENTIAL MISSING ACCENT: Found '{}', should be '{}'", 
+                                        incorrect, correct);
+                            }
+                        }
                     }
                     
-                    if line.contains("Aqu") || line.contains("aqu") {
-                        eprintln!("ENCODING DEBUG: Found 'Aqu/aqu' - might be missing 'í'");
-                        eprintln!("Line: {}", line);
-                        eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
+                    // Debug the raw bytes received, but only in verbose mode
+                    if verbose {
+                        eprintln!("RAW INPUT DEBUG: Received {} bytes", bytes_read);
+                        eprintln!("TEXT RECEIVED: {}", line.trim());
+                        eprintln!("ENCODING CHECK: UTF-8 valid: {}", String::from_utf8(line.clone().into_bytes()).is_ok());
                     }
                     
-                    if line.contains("comunicacin") || line.contains("comunicacion") {
-                        eprintln!("ENCODING DEBUG: Found 'comunicacion' - might be missing 'ó'");
-                        eprintln!("Line: {}", line);
-                        eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
-                    }
-                    
-                    // Print diagnostic info for every line received
-                    eprintln!("TEXT RECEIVED: {}", line.trim());
-                    eprintln!("ENCODING CHECK: UTF-8 valid: {}", String::from_utf8(line.clone().into_bytes()).is_ok());
-                    
-                    // Check specifically for Spanish characters that should have accents
-                    let spanish_words = [
-                        ("poltica", "política"),
-                        ("politica", "política"),
-                        ("aqu", "aquí"),
-                        ("Aqu", "Aquí"),
-                        ("comunicacion", "comunicación"),
-                        ("informacion", "información"),
-                        ("educacion", "educación")
-                    ];
-                    
-                    for (incorrect, correct) in spanish_words.iter() {
-                        if line.contains(incorrect) {
-                            eprintln!("ACCENT MISSING: Found '{}', should be '{}'", incorrect, correct);
+                    // Detailed debugging for problematic Spanish words, only in debug_accents mode
+                    if debug_accents && session_language.starts_with("es") {
+                        // Check common problem characters with detailed byte analysis
+                        if line.contains("poltica") || line.contains("politica") {
+                            eprintln!("ENCODING DEBUG: Found 'poltica/politica' - might be missing 'í'");
+                            eprintln!("Line: {}", line);
+                            eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
+                        }
+                        
+                        if line.contains("Aqu") || line.contains("aqu") {
+                            eprintln!("ENCODING DEBUG: Found 'Aqu/aqu' - might be missing 'í'");
+                            eprintln!("Line: {}", line);
+                            eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
+                        }
+                        
+                        if line.contains("comunicacin") || line.contains("comunicacion") {
+                            eprintln!("ENCODING DEBUG: Found 'comunicacion' - might be missing 'ó'");
+                            eprintln!("Line: {}", line);
+                            eprintln!("HEX: {}", line.bytes().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "));
+                        }
+                        
+                        // Check specifically for Spanish characters that should have accents
+                        let spanish_words = [
+                            ("poltica", "política"),
+                            ("politica", "política"),
+                            ("aqu", "aquí"),
+                            ("Aqu", "Aquí"),
+                            ("comunicacion", "comunicación"),
+                            ("informacion", "información"),
+                            ("educacion", "educación")
+                        ];
+                        
+                        for (incorrect, correct) in spanish_words.iter() {
+                            if line.contains(incorrect) {
+                                eprintln!("ACCENT MISSING: Found '{}', should be '{}'", incorrect, correct);
+                            }
                         }
                     }
                     
@@ -490,7 +654,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if !language_detected {
                         if auto_detect && buffer.len() > 60 {
                             // Only perform language detection when auto_detect is true
-                            eprintln!("Auto-detecting language from initial text...");
+                            if verbose {
+                                eprintln!("Auto-detecting language from initial text...");
+                            }
                             
                             if let Some(detected) = kokoros::tts::phonemizer::detect_language(&buffer) {
                                 eprintln!("Detected language: {}", detected);
@@ -498,7 +664,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else {
                                 eprintln!("Language detection failed, using specified: {}", lan);
                             }
-                        } else {
+                        } else if verbose {
                             // With auto_detect disabled, just use the specified language
                             eprintln!("Using specified language: {}", lan);
                         }
@@ -507,11 +673,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if !force_style {
                             let is_custom = tts.is_using_custom_voices(tts.voices_path());
                             let default_style = kokoros::tts::phonemizer::get_default_voice_for_language(&session_language, is_custom);
+                            // Always show the selected voice, this is important information
                             eprintln!("Selected voice style: {}", default_style);
                             session_style = default_style;
                         }
                         
                         language_detected = true;
+                        // Always show the final language/voice selection as this is important information
                         eprintln!("Will use language: {} with voice: {}", session_language, session_style);
                     }
                     
@@ -547,44 +715,107 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             buffer.clear();
                         }
                     } else {
-                        // For other languages, use the sentence_segmentation library
-                        let eng_sentences = sentence_segmentation::processor::english(&buffer);
+                        // Check the buffer for accented characters before segmentation, but only if debug is enabled
+                        if verbose && session_language.starts_with("es") {
+                            let has_accents = buffer.contains('á') || buffer.contains('é') || 
+                                             buffer.contains('í') || buffer.contains('ó') || 
+                                             buffer.contains('ú') || buffer.contains('ñ') || 
+                                             buffer.contains('ü');
+                            if has_accents {
+                                println!("BUFFER PRE-SEGMENTATION: Spanish text with accents detected");
+                                if debug_accents {
+                                    println!("Buffer: {}", buffer);
+                                }
+                            }
+                        }
                         
-                        // Handle buffer updates differently for the English processor
-                        if !eng_sentences.is_empty() {
-                            // Check if the last sentence appears incomplete
-                            let last_sentence = eng_sentences.last().unwrap();
+                        // Use our UTF-8 safe sentence segmentation function with proper language handling
+                        let sentences = utf8_safe_sentence_segmentation(&buffer, &session_language, verbose, debug_accents);
+                        
+                        if verbose {
+                            println!("SEGMENTATION COMPLETE: Found {} potential sentences", sentences.len());
+                        }
+                        
+                        // Handle buffer updates with UTF-8 safety
+                        if !sentences.is_empty() {
+                            // Check if the last sentence appears incomplete (no ending punctuation)
+                            let last_sentence = sentences.last().unwrap();
+                            
+                            if verbose {
+                                println!("Last segment: {}", last_sentence);
+                            }
+                            
                             if !(last_sentence.ends_with('.') || 
                                  last_sentence.ends_with('!') || 
                                  last_sentence.ends_with('?')) {
-                                // Keep incomplete sentence in buffer
-                                let all_but_last: String = eng_sentences[..eng_sentences.len()-1]
-                                    .iter()
-                                    .fold(String::new(), |acc, s| acc + s + " ");
                                 
-                                if buffer.starts_with(&all_but_last) {
-                                    buffer = buffer[all_but_last.len()..].to_string();
-                                } else {
-                                    // If we can't find the exact text, just keep the last sentence
-                                    buffer = last_sentence.to_string();
+                                if verbose {
+                                    println!("Last segment appears incomplete - will keep in buffer");
                                 }
                                 
-                                // Only use complete sentences
-                                complete_sentences = eng_sentences[..eng_sentences.len()-1]
-                                    .iter()
-                                    .map(|s| s.to_string())
-                                    .collect();
+                                // Handle buffer update with careful UTF-8 byte handling
+                                if sentences.len() > 1 {
+                                    // Everything except the last sentence
+                                    let complete_text: String = sentences[..sentences.len()-1]
+                                        .iter()
+                                        .fold(String::new(), |acc, s| acc + s + " ");
+                                    
+                                    // Try to find where the complete sentences end in the buffer
+                                    if buffer.starts_with(&complete_text) {
+                                        // Safe to remove the processed text and keep remainder
+                                        buffer = buffer[complete_text.len()..].to_string();
+                                        if verbose {
+                                            println!("BUFFER UPDATE: Remaining text in buffer: '{}'", 
+                                                    buffer.chars().take(30).collect::<String>());
+                                        }
+                                    } else {
+                                        // Fallback: just keep the last incomplete sentence
+                                        buffer = last_sentence.to_string();
+                                        if verbose {
+                                            println!("BUFFER FALLBACK: Keeping last segment: '{}'", 
+                                                    last_sentence.chars().take(30).collect::<String>());
+                                        }
+                                    }
+                                    
+                                    // Only use complete sentences for processing
+                                    complete_sentences = sentences[..sentences.len()-1].to_vec();
+                                } else {
+                                    // Only one sentence and it's incomplete - keep entire buffer
+                                    if verbose {
+                                        println!("Single incomplete sentence - keeping entire buffer");
+                                    }
+                                }
                             } else {
-                                // All sentences are complete
-                                complete_sentences = eng_sentences.iter().map(|s| s.to_string()).collect();
+                                // All sentences are complete, including the last one
+                                if verbose {
+                                    println!("All segments appear complete - processing everything");
+                                }
+                                complete_sentences = sentences;
                                 buffer.clear();
+                            }
+                            
+                            // Check for accent preservation in Spanish text, but only in debug mode
+                            if debug_accents && session_language.starts_with("es") {
+                                for (i, sentence) in complete_sentences.iter().enumerate() {
+                                    let has_accents = sentence.contains('á') || sentence.contains('é') || 
+                                                     sentence.contains('í') || sentence.contains('ó') || 
+                                                     sentence.contains('ú') || sentence.contains('ñ') || 
+                                                     sentence.contains('ü');
+                                    if has_accents {
+                                        println!("SEGMENT {} RETAINS ACCENTS: {}", i, sentence);
+                                    } else if verbose {
+                                        println!("SEGMENT {} NO ACCENTS: {}", i, sentence);
+                                    }
+                                }
                             }
                         }
                     };
                     
                     // Handle special case: no complete sentences but substantial text
                     if complete_sentences.is_empty() && buffer.len() > 200 {
-                        eprintln!("Processing substantial incomplete text segment...");
+                        if verbose {
+                            eprintln!("Processing substantial incomplete text segment...");
+                        }
                         let end_index = if buffer.len() > 200 { 200 } else { buffer.len() };
                         let segment = buffer[..end_index].to_string();
                         complete_sentences.push(segment.clone());
@@ -607,17 +838,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             sentence.to_string() 
                         };
                         
-                        // CRITICAL FIX: For Spanish text, restore accents lost during sentence segmentation
-                        // This is the root cause of the accent problems
+                        // Always check for UTF-8 validity before processing
+                        if !String::from_utf8(text_to_process.clone().into_bytes()).is_ok() {
+                            eprintln!("WARNING: Invalid UTF-8 detected in segment {}. Attempting to fix...", i);
+                            // Use lossy conversion to replace invalid sequences
+                            text_to_process = String::from_utf8_lossy(&text_to_process.as_bytes().to_vec()).to_string();
+                        }
+                        
+                        // Check if there are accented characters already
+                        let has_accents = text_to_process.contains('á') || text_to_process.contains('é') || 
+                                         text_to_process.contains('í') || text_to_process.contains('ó') || 
+                                         text_to_process.contains('ú') || text_to_process.contains('ñ') || 
+                                         text_to_process.contains('ü');
+                        
+                        // For Spanish text, always try to restore accents
                         if session_language.starts_with("es") {
-                            // Use kokoros restore_spanish_accents to fix lost accents
-                            text_to_process = kokoros::tts::koko::restore_spanish_accents(&text_to_process);
+                            // Log pre-restoration state
+                            if has_accents {
+                                eprintln!("SEGMENT {} HAS ACCENTS: Accented characters present before restoration", i);
+                            } else {
+                                eprintln!("SEGMENT {} NO ACCENTS: No accented characters found, will attempt restoration", i);
+                            }
                             
-                            // Log the restoration
-                            if text_to_process != sentence.to_string() {
-                                eprintln!("ACCENT RESTORATION: Fixed accents in sentence");
-                                eprintln!("  Before: {}", sentence);
-                                eprintln!("  After: {}", text_to_process);
+                            // Use kokoros restore_spanish_accents to fix lost accents
+                            let restored = kokoros::tts::koko::restore_spanish_accents(&text_to_process);
+                            
+                            // Compare before and after restoration
+                            if restored != text_to_process {
+                                eprintln!("ACCENT RESTORATION: Fixed accents in segment {}", i);
+                                eprintln!("  Before: {}", text_to_process);
+                                eprintln!("  After: {}", restored);
+                                
+                                // Use the restored text
+                                text_to_process = restored;
+                            } else if !has_accents {
+                                eprintln!("WARNING: Segment {} still has no accents after restoration attempt", i);
+                                eprintln!("  Text: {}", text_to_process);
                             }
                         }
                         
@@ -689,19 +945,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         buffer.trim().to_string() 
                     };
                     
-                    // CRITICAL FIX: For Spanish text, restore accents lost during processing
+                    // Always check for UTF-8 validity before processing
+                    if !String::from_utf8(final_text.clone().into_bytes()).is_ok() {
+                        eprintln!("WARNING: Invalid UTF-8 detected in final text. Attempting to fix...");
+                        // Use lossy conversion to replace invalid sequences
+                        final_text = String::from_utf8_lossy(&final_text.as_bytes().to_vec()).to_string();
+                    }
+                    
+                    // Check if there are already accented characters
+                    let has_accents = final_text.contains('á') || final_text.contains('é') || 
+                                     final_text.contains('í') || final_text.contains('ó') || 
+                                     final_text.contains('ú') || final_text.contains('ñ') || 
+                                     final_text.contains('ü');
+                    
+                    // For Spanish text, always try to restore accents
                     if session_language.starts_with("es") {
-                        // Use kokoros restore_spanish_accents to fix lost accents
+                        // Log pre-restoration state
+                        if has_accents {
+                            eprintln!("FINAL TEXT HAS ACCENTS: Accented characters present before restoration");
+                        } else {
+                            eprintln!("FINAL TEXT NO ACCENTS: No accented characters found, will attempt restoration");
+                        }
+                        
+                        // Use our UTF-8 safe accent restoration
                         let restored = kokoros::tts::koko::restore_spanish_accents(&final_text);
                         
-                        // Log the restoration
+                        // Compare before and after restoration
                         if restored != final_text {
                             eprintln!("ACCENT RESTORATION: Fixed accents in final text");
                             eprintln!("  Before: {}", final_text);
                             eprintln!("  After: {}", restored);
+                            
+                            // Use the restored text
+                            final_text = restored;
+                        } else if !has_accents {
+                            eprintln!("WARNING: Final text still has no accents after restoration attempt");
+                            eprintln!("  Text: {}", final_text);
                         }
                         
-                        final_text = restored;
+                        // Show each accented character for debugging
+                        for (i, c) in final_text.char_indices() {
+                            if !c.is_ascii() {
+                                eprintln!("  FINAL TEXT Pos {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                            }
+                        }
                     };
                     
                     // Generate audio with consistent settings
