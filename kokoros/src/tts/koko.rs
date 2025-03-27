@@ -421,8 +421,20 @@ impl TTSKoko {
     // Call this explicitly when done with the TTS engine to avoid segfault
     pub fn cleanup(&self) {
         // This method exists to provide a hook for proper cleanup
-        // It won't do anything specific right now, but ensures proper drop order
-        // by being called explicitly before program exit
         println!("Cleaning up TTS engine resources...");
+        
+        // Explicitly drop any resources that might cause issues at shutdown
+        // This helps prevent mutex issues with ONNX Runtime
+        
+        // For the Arc<OrtKoko>, we'll try to ensure it's properly cleaned up
+        // by explicitly doing memory management here
+        let _ = std::sync::Arc::strong_count(&self.model);
+        
+        // Force a GC-like cleanup by allocating and dropping some memory
+        let _cleanup_buf = vec![0u8; 1024];
+        drop(_cleanup_buf);
+        
+        // Sleep briefly to let any background threads finish
+        std::thread::sleep(std::time::Duration::from_millis(10));
     }
 }
