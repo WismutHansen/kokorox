@@ -32,21 +32,36 @@ New Discord community: <https://discord.gg/E566zfDWqD>, Please join us if you in
 
 ## Installation
 
-1. Install required Python packages:
+1. Install required dependencies:
+
+   **System Dependencies:**
+   - **Ubuntu/Debian**: `sudo apt-get install espeak-ng libespeak-ng-dev`
+   - **macOS**: `brew install espeak-ng`
+   - **Windows**: Install espeak-ng from [the official repository](https://github.com/espeak-ng/espeak-ng/releases)
+
+2. Install required Python packages:
 
 ```bash
 pip install -r scripts/requirements.txt
 ```
 
-2. Initialize voice data:
+3. Download model and voices:
 
 ```bash
-python scripts/fetch_voices.py
+# Download the model
+bash scripts/download_models.sh
+
+# Download all voices (default approach)
+python scripts/download_voices.py --all
+
+# Or download voices for specific languages
+python scripts/download_voices.py --lang en zh ja
+
+# List all available languages and voices
+python scripts/download_voices.py --list
 ```
 
-This step fetches the required `voices.json` data file, which is necessary for voice synthesis.
-
-3. Build the project:
+4. Build the project:
 
 ```bash
 cargo build --release
@@ -71,6 +86,32 @@ The generated audio will be saved to `tmp/output.wav` by default. You can custom
 ```
 ./target/release/koko text "I hope you're having a great day today!" --output greeting.wav
 ```
+
+### Multi-language support
+
+Kokoros supports multiple languages including English, Chinese, Japanese, German, French, and more.
+
+#### Specify language manually
+
+Use the `--lan` or `-l` option to specify the language:
+
+```
+./target/release/koko text "你好，世界!" --lan zh
+./target/release/koko text "こんにちは、世界!" --lan ja
+./target/release/koko text "Hallo, Welt!" --lan de
+```
+
+#### Automatic language detection
+
+Use the `--auto-detect` or `-a` flag to automatically detect the language:
+
+```
+./target/release/koko -a text "Hello, world!"   # Will detect English
+./target/release/koko -a text "你好，世界!"      # Will detect Chinese
+./target/release/koko -a text "こんにちは、世界!" # Will detect Japanese
+```
+
+The language detection is powered by the `whatlang` library and supports a wide range of languages.
 
 ### Generate speech for each line in a file
 
