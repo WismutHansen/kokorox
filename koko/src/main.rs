@@ -403,12 +403,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut buffer = String::new();
                 
                 loop {
-                    // Read a new line from stdin
+                    // Read a new line from stdin - THIS IS WHERE ENCODING ISSUES LIKELY OCCUR
+                    eprintln!("BEFORE READ: About to read from stdin");
                     let mut line = String::new();
+                    
+                    // Try to read using standard method first
                     let bytes_read = reader.read_line(&mut line).await?;
                     if bytes_read == 0 {
                         // EOF reached
                         break;
+                    }
+                    
+                    // Check specifically for encoding issues by comparing bytes vs chars
+                    let bytes_count = line.bytes().count();
+                    let chars_count = line.chars().count();
+                    eprintln!("ENCODING ANALYSIS: Bytes: {}, Chars: {}, Difference: {}", 
+                              bytes_count, chars_count, bytes_count - chars_count);
+                    
+                    // If the string contains multi-byte characters (like accents), there will be a difference
+                    if bytes_count != chars_count {
+                        eprintln!("MULTI-BYTE CHARS DETECTED: Line likely contains accented characters");
+                        
+                        // Check the encoding of the string
+                        for (i, c) in line.char_indices() {
+                            if !c.is_ascii() {
+                                let mut bytes = [0u8; 4];
+                                let len = c.encode_utf8(&mut bytes).len();
+                                let byte_str = bytes[0..len].iter()
+                                    .map(|b| format!("{:02X}", b))
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+                                
+                                eprintln!("  Char at byte {}: '{}' (U+{:04X}) - UTF-8: {}", 
+                                          i, c, c as u32, byte_str);
+                            }
+                        }
                     }
                     
                     // Debug the raw bytes received

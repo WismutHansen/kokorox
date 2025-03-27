@@ -525,6 +525,50 @@ impl Phonemizer {
             }
         }
 
+        // Debug for Spanish text right before phonemization (the crucial moment)
+        if self.lang.starts_with("es") {
+            println!("PHONEMIZER PRE-PROCESS: About to process Spanish text:");
+            println!("Text: {}", text);
+            
+            // Check for accented characters
+            let has_accents = text.contains('á') || text.contains('é') || 
+                             text.contains('í') || text.contains('ó') || 
+                             text.contains('ú') || text.contains('ñ') || 
+                             text.contains('ü');
+                             
+            if has_accents {
+                println!("ACCENTS PRESENT: Text has accented characters! Will try to preserve them.");
+                // Debug each accented character
+                for (i, c) in text.char_indices() {
+                    if !c.is_ascii() {
+                        let mut bytes = [0u8; 4];
+                        let len = c.encode_utf8(&mut bytes).len();
+                        let byte_str = bytes[0..len].iter()
+                            .map(|b| format!("{:02X}", b))
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        
+                        println!("  Accent at {}: '{}' (U+{:04X}) - UTF-8: {}", 
+                               i, c, c as u32, byte_str);
+                    }
+                }
+            } else {
+                println!("NO ACCENTS FOUND! This Spanish text is missing proper accents.");
+                
+                // Check for words that should have accents
+                let suspect_words = [
+                    "politica", "poltica", "tecnologia", "comunicacion", 
+                    "aqu", "educacion", "creacion", "publica", "publico"
+                ];
+                
+                for word in suspect_words.iter() {
+                    if text.contains(word) {
+                        println!("  ISSUE FOUND: '{}' is missing accents", word);
+                    }
+                }
+            }
+        }
+        
         // Use espeak-rs directly for phonemization
         let phonemes = match text_to_phonemes(
             &text,
