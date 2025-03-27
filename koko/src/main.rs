@@ -599,13 +599,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         
                         // Add proper punctuation if needed
-                        let text_to_process = if !(sentence.ends_with('.') || 
+                        let mut text_to_process = if !(sentence.ends_with('.') || 
                                                 sentence.ends_with('!') || 
                                                 sentence.ends_with('?')) {
                             format!("{}.", sentence)
                         } else {
                             sentence.to_string() 
                         };
+                        
+                        // CRITICAL FIX: For Spanish text, restore accents lost during sentence segmentation
+                        // This is the root cause of the accent problems
+                        if session_language.starts_with("es") {
+                            // Use kokoros restore_spanish_accents to fix lost accents
+                            text_to_process = kokoros::tts::koko::restore_spanish_accents(&text_to_process);
+                            
+                            // Log the restoration
+                            if text_to_process != sentence.to_string() {
+                                eprintln!("ACCENT RESTORATION: Fixed accents in sentence");
+                                eprintln!("  Before: {}", sentence);
+                                eprintln!("  After: {}", text_to_process);
+                            }
+                        }
                         
                         eprintln!("Processing segment {}: {}", i+1, 
                             if text_to_process.len() > 50 {
@@ -667,12 +681,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("Processing final text: {}", buffer.trim());
                     
                     // Add period if needed
-                    let final_text = if !(buffer.trim().ends_with('.') || 
+                    let mut final_text = if !(buffer.trim().ends_with('.') || 
                                         buffer.trim().ends_with('!') || 
                                         buffer.trim().ends_with('?')) {
                         format!("{}.", buffer.trim())
                     } else {
                         buffer.trim().to_string() 
+                    };
+                    
+                    // CRITICAL FIX: For Spanish text, restore accents lost during processing
+                    if session_language.starts_with("es") {
+                        // Use kokoros restore_spanish_accents to fix lost accents
+                        let restored = kokoros::tts::koko::restore_spanish_accents(&final_text);
+                        
+                        // Log the restoration
+                        if restored != final_text {
+                            eprintln!("ACCENT RESTORATION: Fixed accents in final text");
+                            eprintln!("  Before: {}", final_text);
+                            eprintln!("  After: {}", restored);
+                        }
+                        
+                        final_text = restored;
                     };
                     
                     // Generate audio with consistent settings

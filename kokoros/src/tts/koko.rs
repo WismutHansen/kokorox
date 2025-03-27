@@ -53,7 +53,7 @@ impl Default for InitConfig {
 }
 
 // Function to restore accents in Spanish text
-fn restore_spanish_accents(text: &str) -> String {
+pub fn restore_spanish_accents(text: &str) -> String {
     let mut fixed = text.to_string();
     
     // Common Spanish words with accents that might be lost
