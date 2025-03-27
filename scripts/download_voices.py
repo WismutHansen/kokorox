@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Voice downloader for Kokoros TTS
-This script downloads voice files from Hugging Face model repository
+Voice and model downloader for Kokoros TTS
+This script downloads the required files from the official sources
 """
 
 import os
@@ -9,21 +9,46 @@ import sys
 import argparse
 import json
 import requests
-from typing import Dict, List, Optional
 from pathlib import Path
-import shutil
 import tqdm
+import time
 
+# URLs for resources
+RESOURCES = {
+    "model": {
+        "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
+        "path": "checkpoints/kokoro-v1.0.onnx",
+        "desc": "Kokoro model file (ONNX format)"
+    },
+    "voices": {
+        "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
+        "path": "data/voices-v1.0.bin",
+        "desc": "Voices data file (contains all voices)"
+    },
+    "segmentation": {
+        "url": "https://raw.githubusercontent.com/thewh1teagle/kokoro-onnx/main/examples/en-sent.bin",
+        "path": "data/en-sent.bin",
+        "desc": "English sentence segmentation model"
+    }
+}
 
-# URLs for voice files
-VOICES_INFO_URL = "https://huggingface.co/hexgrad/Kokoro-82M/raw/main/langs/langs.json"
-VOICE_BASE_URL = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/langs/{lang}/{voice}.npz"
-DEFAULT_VOICES_BIN = "data/voices-v1.0.bin"  # Default binary file containing all voices
-VOICES_DIR = "data/voices"  # Directory to store individual voice files
+# Information about supported languages (for documentation purposes)
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "ko": "Korean",
+    "ar": "Arabic",
+    "hi": "Hindi"
+}
 
-
-def download_file(url: str, output_path: str, desc: Optional[str] = None) -> None:
-    """Download a file from a URL with progress bar."""
+def download_file(url, output_path, desc=None):
+    """Download a file with progress tracking."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     response = requests.get(url, stream=True)
@@ -46,117 +71,85 @@ def download_file(url: str, output_path: str, desc: Optional[str] = None) -> Non
             bar.update(size)
 
 
-def get_available_voices() -> Dict:
-    """Get information about available voices from Hugging Face."""
-    try:
-        response = requests.get(VOICES_INFO_URL)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        print(f"Error fetching voice information: {e}")
-        # Create a basic fallback structure if API fails
-        return {
-            "languages": {
-                "en": {"name": "English", "voices": ["af_sarah", "af_nicole"]},
-                "zh": {"name": "Chinese", "voices": ["zf_xiaoxiao"]},
-                "ja": {"name": "Japanese", "voices": ["jf_alpha"]},
-                "de": {"name": "German", "voices": ["bf_emma"]}
-            }
-        }
-
-
-def download_voice(lang: str, voice: str, voices_dir: str) -> str:
-    """Download a specific voice file."""
-    output_path = os.path.join(voices_dir, lang, f"{voice}.npz")
+def download_resource(resource_key):
+    """Download a specific resource."""
+    resource = RESOURCES[resource_key]
+    output_path = resource["path"]
+    
+    # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    voice_url = VOICE_BASE_URL.format(lang=lang, voice=voice)
+    # Check if file already exists
+    if os.path.exists(output_path):
+        file_size = os.path.getsize(output_path)
+        if file_size > 0:
+            print(f"{resource['desc']} already exists at {output_path} ({file_size} bytes)")
+            return True
     
+    # Download the file
     try:
-        download_file(voice_url, output_path, f"Downloading {lang}/{voice}")
-        return output_path
-    except requests.RequestException as e:
-        print(f"Error downloading voice {voice}: {e}")
-        return ""
+        print(f"Downloading {resource['desc']}...")
+        download_file(resource["url"], output_path, f"Downloading {resource['desc']}")
+        print(f"Downloaded {resource['desc']} to {output_path}")
+        return True
+    except Exception as e:
+        print(f"Error downloading {resource_key}: {e}")
+        return False
 
 
-def download_all_voices() -> str:
-    """Download the combined voices binary file."""
-    os.makedirs("data", exist_ok=True)
-    output_path = DEFAULT_VOICES_BIN
+def list_supported_languages():
+    """List all supported languages."""
+    print("\nKokoros supports the following languages:")
+    print("=" * 40)
     
-    try:
-        download_file(
-            "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin", 
-            output_path,
-            "Downloading all voices (combined file)"
-        )
-        return output_path
-    except requests.RequestException as e:
-        print(f"Error downloading voices: {e}")
-        return ""
+    for code, name in SUPPORTED_LANGUAGES.items():
+        print(f"  {name} ({code})")
+    
+    print("\nTo use these languages:")
+    print("1. Manual selection: --lan <language-code>")
+    print("   Example: ./target/release/koko text \"Hello\" --lan en")
+    print("   Example: ./target/release/koko text \"你好\" --lan zh")
+    print("\n2. Automatic detection: --auto-detect or -a")
+    print("   Example: ./target/release/koko -a text \"Hello\"")
 
 
-def download_voices_by_language(langs: List[str], voices_dir: str) -> List[str]:
-    """Download all available voices for specified languages."""
-    voices_info = get_available_voices()
-    downloaded_voices = []
+def main():
+    parser = argparse.ArgumentParser(description="Download resources for Kokoros TTS")
     
-    for lang in langs:
-        if lang in voices_info["languages"]:
-            lang_info = voices_info["languages"][lang]
-            print(f"\nDownloading {lang_info['name']} voices:")
-            
-            for voice in lang_info["voices"]:
-                voice_path = download_voice(lang, voice, voices_dir)
-                if voice_path:
-                    downloaded_voices.append(voice_path)
-        else:
-            print(f"Language '{lang}' not found in available voices")
-    
-    return downloaded_voices
-
-
-def list_available_languages() -> None:
-    """List all available languages and their voices."""
-    voices_info = get_available_voices()
-    
-    print("\nAvailable languages and voices:")
-    print("==============================")
-    
-    for lang_code, lang_info in voices_info["languages"].items():
-        print(f"\n{lang_info['name']} ({lang_code}):")
-        for voice in lang_info["voices"]:
-            print(f"  - {voice}")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Download voice files for Kokoros TTS")
-    
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--all", action="store_true", help="Download the combined voices file (default approach)")
-    group.add_argument("--lang", nargs="+", help="Download voices for specific languages (e.g., en zh ja)")
-    group.add_argument("--list", action="store_true", help="List available languages and voices")
-    
-    parser.add_argument("--output-dir", default=VOICES_DIR, help="Directory to store individual voice files")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--all", action="store_true", help="Download all required resources (model, voices, etc.)")
+    group.add_argument("--model", action="store_true", help="Download only the model file")
+    group.add_argument("--voices", action="store_true", help="Download only the voices data file")
+    group.add_argument("--list-languages", action="store_true", help="List supported languages")
     
     args = parser.parse_args()
     
-    if args.list:
-        list_available_languages()
+    # Default to downloading all if no specific option is provided
+    if not (args.all or args.model or args.voices or args.list_languages):
+        args.all = True
+    
+    if args.list_languages:
+        list_supported_languages()
         return
     
-    if args.all:
-        voices_path = download_all_voices()
-        if voices_path:
-            print(f"\nAll voices downloaded to {voices_path}")
-            print("You can now use Kokoros with the default voice file")
+    # Create directories
+    os.makedirs("data", exist_ok=True)
+    os.makedirs("checkpoints", exist_ok=True)
     
-    if args.lang:
-        voices = download_voices_by_language(args.lang, args.output_dir)
-        if voices:
-            print(f"\n{len(voices)} voices downloaded to {args.output_dir}")
-            print("To use these voices, update the --data parameter in koko command")
+    if args.all:
+        print("Downloading all required resources for Kokoros TTS...")
+        for resource_key in RESOURCES:
+            download_resource(resource_key)
+    else:
+        if args.model:
+            download_resource("model")
+        if args.voices:
+            download_resource("voices")
+    
+    print("\nDownload complete!")
+    print("You can now build and run Kokoros:")
+    print("  cargo build --release")
+    print("  ./target/release/koko -h")
 
 
 if __name__ == "__main__":

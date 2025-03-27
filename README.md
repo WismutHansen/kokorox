@@ -48,17 +48,15 @@ pip install -r scripts/requirements.txt
 3. Download model and voices:
 
 ```bash
-# Download the model
-bash scripts/download_models.sh
-
-# Download all voices (default approach)
+# Download all required resources (recommended)
 python scripts/download_voices.py --all
 
-# Or download voices for specific languages
-python scripts/download_voices.py --lang en zh ja
+# Or download specific resources
+python scripts/download_voices.py --model   # Download only the model
+python scripts/download_voices.py --voices  # Download only the voices
 
-# List all available languages and voices
-python scripts/download_voices.py --list
+# List supported languages
+python scripts/download_voices.py --list-languages
 ```
 
 4. Build the project:

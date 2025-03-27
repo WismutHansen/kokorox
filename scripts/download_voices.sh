@@ -1,2 +1,9 @@
-mkdir data
-wget "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" -O "data/voices-v1.0.bin"
+#!/bin/bash
+# Legacy script for backward compatibility
+# Now just calls the Python download script
+
+echo "NOTE: This script is maintained for backward compatibility."
+echo "It is recommended to use 'python scripts/download_voices.py --all' instead."
+echo ""
+
+python scripts/download_voices.py --voices
