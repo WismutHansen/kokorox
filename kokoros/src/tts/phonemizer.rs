@@ -153,14 +153,14 @@ lazy_static! {
         let mut m = HashMap::new();
         
         // English variants - female voices
-        m.insert("en-us", "af_sarah.4+af_nicole.6");  // American English - blended female voice
-        m.insert("en-gb", "bf_emma");                 // British English - female voice
-        m.insert("en-au", "bf_emma");                 // Australian English - using British female voice
-        m.insert("en-ca", "af_sarah.4+af_nicole.6");  // Canadian English - American female voice
-        m.insert("en-nz", "bf_emma");                 // New Zealand English - British female voice
-        m.insert("en-ie", "bf_emma");                 // Irish English - British female voice
-        m.insert("en-za", "bf_emma");                 // South African English - British female voice
-        m.insert("en-in", "bf_emma");                 // Indian English - British female voice
+        m.insert("en-us", "af_sky");                 // American English - sky female voice
+        m.insert("en-gb", "bf_emma");                // British English - female voice
+        m.insert("en-au", "bf_emma");                // Australian English - using British female voice
+        m.insert("en-ca", "af_sky");                 // Canadian English - American female voice
+        m.insert("en-nz", "bf_emma");                // New Zealand English - British female voice
+        m.insert("en-ie", "bf_emma");                // Irish English - British female voice
+        m.insert("en-za", "bf_emma");                // South African English - British female voice
+        m.insert("en-in", "bf_emma");                // Indian English - British female voice
         
         // English variants - male voices
         m.insert("en-us-male", "am_liam");            // American English - male voice
@@ -183,21 +183,31 @@ lazy_static! {
         // European languages - female voices where possible
         m.insert("de", "bf_emma");                    // German - using British female voice
         m.insert("fr-fr", "af_sarah.4+af_nicole.6");  // French - using American female voice
-        m.insert("es", "af_sarah.4+af_nicole.6");     // Spanish - using American female voice
+        m.insert("es", "ef_dora");                    // Spanish - using native Spanish female voice
+        m.insert("es-es", "ef_dora");                 // Spanish (Spain) - using native Spanish female voice
+        m.insert("es-mx", "ef_dora");                 // Spanish (Mexico) - using native Spanish female voice
+        m.insert("es-ar", "ef_dora");                 // Spanish (Argentina) - using native Spanish female voice
+        m.insert("es-la", "ef_dora");                 // Spanish (Latin America) - using native Spanish female voice
         m.insert("it", "af_sarah.4+af_nicole.6");     // Italian - using American female voice
-        m.insert("pt-pt", "af_sarah.4+af_nicole.6");  // Portuguese - using American female voice
+        m.insert("pt-pt", "pf_dora");                 // Portuguese - using native Portuguese female voice
+        m.insert("pt-br", "pf_dora");                 // Portuguese (Brazil) - using native Portuguese female voice
         m.insert("ru", "af_sarah.4+af_nicole.6");     // Russian - using American female voice
         
         // European languages - male voices where suitable
-        m.insert("nl", "am_liam");                    // Dutch - using American male voice
-        m.insert("sv", "am_liam");                    // Swedish - using American male voice
-        m.insert("da", "am_liam");                    // Danish - using American male voice
-        m.insert("fi", "am_liam");                    // Finnish - using American male voice
-        m.insert("no", "am_liam");                    // Norwegian - using American male voice
+        m.insert("es-male", "em_alex");              // Spanish - male voice
+        m.insert("es-es-male", "em_alex");           // Spanish (Spain) - male voice
+        m.insert("pt-male", "pm_alex");              // Portuguese - male voice
+        m.insert("pt-pt-male", "pm_alex");           // Portuguese (Portugal) - male voice
+        m.insert("pt-br-male", "pm_alex");           // Portuguese (Brazil) - male voice
+        m.insert("nl", "am_liam");                   // Dutch - using American male voice
+        m.insert("sv", "am_liam");                   // Swedish - using American male voice
+        m.insert("da", "am_liam");                   // Danish - using American male voice
+        m.insert("fi", "am_liam");                   // Finnish - using American male voice
+        m.insert("no", "am_liam");                   // Norwegian - using American male voice
         
         // Default fallback voices for other languages
-        m.insert("default", "af_sarah.4+af_nicole.6"); // Default female voice
-        m.insert("default-male", "am_liam");           // Default male voice
+        m.insert("default", "af_sky");                // Default female voice
+        m.insert("default-male", "am_liam");          // Default male voice
         
         m
     };
@@ -436,6 +446,7 @@ impl Phonemizer {
     pub fn new(lang: &str) -> Self {
         // Validate language or default to en-us if invalid
         let language = if LANGUAGE_MAP.values().any(|&v| v == lang) {
+            println!("Creating phonemizer with language: {}", lang);
             lang.to_string()
         } else {
             eprintln!("Warning: Unsupported language '{}', falling back to en-us", lang);

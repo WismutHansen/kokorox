@@ -138,6 +138,7 @@ enum Mode {
 struct Cli {
     /// A language identifier from
     /// https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md
+    /// Common values: en-us, en-gb, es, fr-fr, de, zh, ja, pt-pt
     #[arg(
         short = 'l',
         long = "lan",
@@ -147,6 +148,7 @@ struct Cli {
     lan: String,
     
     /// Auto-detect language from input text
+    /// When enabled, the system will attempt to detect the language from the input text
     #[arg(
         short = 'a',
         long = "auto-detect",
@@ -155,9 +157,10 @@ struct Cli {
     )]
     auto_detect: bool,
     
-    /// Override style selection when using auto-detect
-    /// When enabled with auto-detect, this will use the specified style
-    /// instead of automatically selecting a language-appropriate style
+    /// Override style selection 
+    /// When enabled, this will use the specified style (set with -s/--style)
+    /// instead of automatically selecting a language-appropriate style.
+    /// Without this flag, the system tries to use language-appropriate voices.
     #[arg(
         long = "force-style",
         value_name = "FORCE_STYLE",
@@ -184,13 +187,18 @@ struct Cli {
     data_path: String,
 
     /// Which single voice to use or voices to combine to serve as the style of speech
+    /// For Spanish: ef_dora (female) or em_alex (male)
+    /// For Portuguese: pf_dora (female) or pm_alex (male)
+    /// For English: af_* (US female), am_* (US male), bf_* (UK female), bm_* (UK male)
+    /// For Japanese: jf_* (female) or jm_* (male)
+    /// For Chinese: zf_* (female) or zm_* (male)
     #[arg(
         short = 's',
         long = "style",
         value_name = "STYLE",
         // if users use `af_sarah.4+af_nicole.6` as style name
         // then we blend it, with 0.4*af_sarah + 0.6*af_nicole
-        default_value = "af_sarah.4+af_nicole.6"
+        default_value = "af_sky"
     )]
     style: String,
 
@@ -338,7 +346,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
 
-                    // Process the line and get audio data
+                    // Process the line and get audio data with proper language handling
                     match tts.tts_raw_audio(&stripped_line, &lan, &style, speed, initial_silence, auto_detect, force_style) {
                         Ok(raw_audio) => {
                             // Write the raw audio samples directly
@@ -354,15 +362,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Create an asynchronous reader for stdin.
                 let stdin = tokio::io::stdin();
                 let mut reader = BufReader::new(stdin);
+                // This buffer stores text as it comes in from stdin
                 let mut buffer = String::new();
+                
+                // We don't need these variables anymore since we use session_language and session_style
 
-                // Set up rodio for immediate playback.
-                // This channel will receive raw audio chunks (Vec<f32>) from TTS generation.
+                // Set up rodio for immediate streaming playback
                 let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
                 let (_stream, stream_handle) = OutputStream::try_default()?;
                 let sink = Sink::try_new(&stream_handle)?;
                 let source = ChannelSource::new(rx, tts.sample_rate());
                 sink.append(source);
+                
+                // Configure TTS settings once at the beginning, but they can be updated
+                let mut session_language = lan.clone();
+                let mut session_style = style.clone();
+                
+                // Flag to track if we've done language detection
+                let mut language_detected = !auto_detect;
 
                 // Also create a WAV file to write the output.
                 let mut wav_file = std::fs::File::create(&output_path)?;
@@ -370,94 +387,224 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 header.write_header(&mut wav_file)?;
                 wav_file.flush()?;
 
+                // Streaming approach:
+                // 1. Detect language from initial input
+                // 2. Process complete sentences as they arrive
+                // 3. Stream audio as soon as each sentence is processed
+                
+                // Keep track of accumulated text and sentence boundaries
+                let mut buffer = String::new();
+                
                 loop {
-                    // Read a new line from stdin.
+                    // Read a new line from stdin
                     let mut line = String::new();
                     let bytes_read = reader.read_line(&mut line).await?;
                     if bytes_read == 0 {
-                        // EOF reached.
+                        // EOF reached
                         break;
                     }
+                    
+                    // Add to our text buffer
                     buffer.push_str(&line);
-
-                    // Use your sentence splitter (here we assume English; adjust if needed)
-                    let sentences = sentence_segmentation::processor::english(&buffer);
-
-                    if !sentences.is_empty() {
-                        // Clone sentences so we can manipulate.
-                        let mut complete_sentences = sentences.clone();
-
-                        // Check if the last sentence appears incomplete.
-                        if let Some(last_sentence) = complete_sentences.last() {
-                            let trimmed = last_sentence.trim();
-                            if !(trimmed.ends_with('.')
-                                || trimmed.ends_with('!')
-                                || trimmed.ends_with('?'))
-                            {
-                                // Remove the incomplete sentence from processing.
-                                complete_sentences.pop();
+                    
+                    // If we haven't detected language yet and have enough text, do it now
+                    if !language_detected && buffer.len() > 60 {
+                        eprintln!("Detecting language from initial text...");
+                        
+                        // Detect language if auto-detect is enabled
+                        if auto_detect {
+                            if let Some(detected) = kokoros::tts::phonemizer::detect_language(&buffer) {
+                                eprintln!("Detected language: {}", detected);
+                                session_language = detected;
+                            } else {
+                                eprintln!("Language detection failed, using specified: {}", lan);
                             }
                         }
-
-                        // If there is at least one complete sentence, process it.
-                        if !complete_sentences.is_empty() {
-                            for sentence in complete_sentences.iter() {
-                                let sentence = sentence.trim();
-                                if sentence.is_empty() {
-                                    continue;
+                        
+                        // Select appropriate voice style if not forcing a specific one
+                        if !force_style {
+                            let is_custom = tts.is_using_custom_voices(tts.voices_path());
+                            let default_style = kokoros::tts::phonemizer::get_default_voice_for_language(&session_language, is_custom);
+                            eprintln!("Selected voice style: {}", default_style);
+                            session_style = default_style;
+                        }
+                        
+                        language_detected = true;
+                        eprintln!("Will use language: {} with voice: {}", session_language, session_style);
+                    }
+                    
+                    // Extract and process complete sentences
+                    let mut complete_sentences = Vec::new();
+                    
+                    // Process sentences based on language type
+                    if session_language.starts_with("zh") || 
+                       session_language.starts_with("ja") || 
+                       session_language.starts_with("ko") 
+                    {
+                        // For CJK languages, extract based on special punctuation
+                        let mut cjk_sentences = Vec::new();
+                        let mut current = String::new();
+                        
+                        for c in buffer.chars() {
+                            current.push(c);
+                            if c == '。' || c == '！' || c == '？' || c == '.' || c == '!' || c == '?' {
+                                if !current.trim().is_empty() {
+                                    cjk_sentences.push(current.clone());
+                                    current.clear();
                                 }
-                                eprintln!("Processing sentence: {}", sentence);
-
-                                let audio_chunk = tts
-                                    .tts_raw_audio(sentence, &lan, &style, speed, initial_silence, auto_detect, force_style)
-                                    .map_err(|e| {
-                                        eprintln!("Error generating audio for sentence: {}", e);
-                                        e
-                                    })?;
-                                // Immediately send the audio chunk for playback.
-                                tx.send(audio_chunk.clone())?;
-                                // Also write the chunk to the WAV file.
-                                write_audio_chunk(&mut wav_file, &audio_chunk)?;
-                                wav_file.flush()?;
                             }
-                            // Remove the processed text from the beginning of the buffer.
-                            // One strategy is to join the complete sentences and then remove that prefix.
-                            let processed_text = complete_sentences.join(" ");
-                            if buffer.starts_with(&processed_text) {
-                                buffer = buffer[processed_text.len()..].to_string();
+                        }
+                        
+                        // Update complete_sentences with the extracted CJK sentences
+                        complete_sentences = cjk_sentences;
+                        
+                        // Keep the incomplete sentence in the buffer
+                        if !current.trim().is_empty() {
+                            buffer = current;
+                        } else {
+                            buffer.clear();
+                        }
+                    } else {
+                        // For other languages, use the sentence_segmentation library
+                        let eng_sentences = sentence_segmentation::processor::english(&buffer);
+                        
+                        // Handle buffer updates differently for the English processor
+                        if !eng_sentences.is_empty() {
+                            // Check if the last sentence appears incomplete
+                            let last_sentence = eng_sentences.last().unwrap();
+                            if !(last_sentence.ends_with('.') || 
+                                 last_sentence.ends_with('!') || 
+                                 last_sentence.ends_with('?')) {
+                                // Keep incomplete sentence in buffer
+                                let all_but_last: String = eng_sentences[..eng_sentences.len()-1]
+                                    .iter()
+                                    .fold(String::new(), |acc, s| acc + s + " ");
+                                
+                                if buffer.starts_with(&all_but_last) {
+                                    buffer = buffer[all_but_last.len()..].to_string();
+                                } else {
+                                    // If we can't find the exact text, just keep the last sentence
+                                    buffer = last_sentence.to_string();
+                                }
+                                
+                                // Only use complete sentences
+                                complete_sentences = eng_sentences[..eng_sentences.len()-1]
+                                    .iter()
+                                    .map(|s| s.to_string())
+                                    .collect();
                             } else {
-                                // If matching fails (due to extra spaces etc.), clear the buffer.
+                                // All sentences are complete
+                                complete_sentences = eng_sentences.iter().map(|s| s.to_string()).collect();
                                 buffer.clear();
                             }
                         }
+                    };
+                    
+                    // Handle special case: no complete sentences but substantial text
+                    if complete_sentences.is_empty() && buffer.len() > 200 {
+                        eprintln!("Processing substantial incomplete text segment...");
+                        let end_index = if buffer.len() > 200 { 200 } else { buffer.len() };
+                        let segment = buffer[..end_index].to_string();
+                        complete_sentences.push(segment.clone());
+                        buffer = buffer[end_index..].to_string();
+                    }
+                    
+                    // Process complete sentences immediately
+                    for (i, sentence) in complete_sentences.iter().enumerate() {
+                        let sentence = sentence.trim();
+                        if sentence.is_empty() {
+                            continue;
+                        }
+                        
+                        // Add proper punctuation if needed
+                        let text_to_process = if !(sentence.ends_with('.') || 
+                                                sentence.ends_with('!') || 
+                                                sentence.ends_with('?')) {
+                            format!("{}.", sentence)
+                        } else {
+                            sentence.to_string() 
+                        };
+                        
+                        eprintln!("Processing segment {}: {}", i+1, 
+                            if text_to_process.len() > 50 {
+                                format!("{}...", &text_to_process[..50])
+                            } else {
+                                text_to_process.clone() 
+                            });
+                        
+                        // Generate audio with consistent language/voice
+                        match tts.tts_raw_audio(
+                            &text_to_process,
+                            &session_language,
+                            &session_style,
+                            speed,
+                            initial_silence,
+                            false,  // Never auto-detect again
+                            true    // Force the selected style
+                        ) {
+                            Ok(audio) => {
+                                // Stream this chunk immediately
+                                tx.send(audio.clone())?;
+                                
+                                // Also write to WAV file
+                                write_audio_chunk(&mut wav_file, &audio)?;
+                                wav_file.flush()?;
+                                
+                                eprintln!("Streaming audio for this segment...");
+                            },
+                            Err(e) => {
+                                eprintln!("Error processing segment: {}", e);
+                                // Continue with the next sentence
+                            }
+                        }
                     }
                 }
-
-                // Process any remaining text (e.g. if EOF arrives with an incomplete sentence).
+                
+                // Process any remaining text at EOF
                 if !buffer.trim().is_empty() {
                     eprintln!("Processing final text: {}", buffer.trim());
-                    let audio_chunk =
-                        tts.tts_raw_audio(&buffer, &lan, &style, speed, initial_silence, auto_detect, force_style)?;
-                    tx.send(audio_chunk.clone())?;
-                    write_audio_chunk(&mut wav_file, &audio_chunk)?;
-                    wav_file.flush()?;
+                    
+                    // Add period if needed
+                    let final_text = if !(buffer.trim().ends_with('.') || 
+                                        buffer.trim().ends_with('!') || 
+                                        buffer.trim().ends_with('?')) {
+                        format!("{}.", buffer.trim())
+                    } else {
+                        buffer.trim().to_string() 
+                    };
+                    
+                    // Generate audio with consistent settings
+                    match tts.tts_raw_audio(
+                        &final_text,
+                        &session_language,
+                        &session_style,
+                        speed,
+                        initial_silence,
+                        false,
+                        true
+                    ) {
+                        Ok(audio) => {
+                            // Stream final chunk
+                            tx.send(audio.clone())?;
+                            
+                            // Write to WAV file
+                            write_audio_chunk(&mut wav_file, &audio)?;
+                            wav_file.flush()?;
+                            
+                            eprintln!("Streaming final audio segment...");
+                        },
+                        Err(e) => {
+                            eprintln!("Error processing final segment: {}", e);
+                        }
+                    }
                 }
                 
-                // Explicitly drop the sender to close the channel
+                // Drop the sender to close the channel
                 drop(tx);
                 
-                // At this point, we need a clean exit
-                // This is the key part that prevents segfault:
-                // Instead of waiting for audio to finish, we'll stop gracefully
-                eprintln!("Processing complete. Stopping audio playback...");
-                
-                // First stop the sink immediately
-                sink.stop();
-                
-                // This is critical: wait a moment for any internal threads to clean up
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                
-                eprintln!("Playback finished.");
+                // Wait for all audio to finish playing
+                eprintln!("All text processed. Waiting for audio playback to complete...");
+                sink.sleep_until_end();
             }
         }
 
