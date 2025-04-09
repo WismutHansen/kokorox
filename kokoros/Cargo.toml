@@ -18,12 +18,11 @@ whatlang = "0.16.4"
 
 mp3lame-encoder = "0.2.1"
 
-
-# ONNX Runtime dependencies
+# Base ONNX Runtime configuration
 ort = { version = "2.0.0-rc.9", default-features = true }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-ort = { version = "2.0.0-rc.9", features = ["coreml"] }
-
-[target.'cfg(not(target_os = "macos"))'.dependencies]
-ort = { version = "2.0.0-rc.9", features = [] }
+[features]
+default = ["cpu"]
+cpu = []
+cuda = ["ort/cuda"]
+coreml = ["ort/coreml"]
