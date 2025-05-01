@@ -201,7 +201,7 @@ struct Cli {
         value_name = "STYLE",
         // if users use `af_sarah.4+af_nicole.6` as style name
         // then we blend it, with 0.4*af_sarah + 0.6*af_nicole
-        default_value = "af_sky"
+        default_value = "af_heart"
     )]
     style: String,
 
@@ -577,9 +577,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         // Auto-enable force_style if the user explicitly changed the style from the default
         // This ensures the specified style is respected
-        if cli.style != "af_sky" && !cli.force_style {
+        if cli.style != "af_heart" && !cli.force_style {
             println!("Style '{}' specified, automatically enabling force-style.", cli.style);
-            println!("(To use language-based style selection, use the default style 'af_sky')");
+            println!("(To use language-based style selection, use the default style 'af_heart')");
             cli.force_style = true;
         }
         
