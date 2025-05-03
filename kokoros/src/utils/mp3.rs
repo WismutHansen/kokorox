@@ -3,7 +3,7 @@ use mp3lame_encoder::{Builder, FlushNoGap, Id3Tag, MonoPcm};
 pub fn pcm_to_mp3(pcm_data: &[f32], sample_rate: u32) -> Result<Vec<u8>, std::io::Error> {
     let mut mp3_encoder = Builder::new().ok_or(std::io::Error::new(
         std::io::ErrorKind::Other,
-        format!("Encoder init failed"),
+        "Encoder init failed".to_string(),
     ))?;
 
     mp3_encoder.set_num_channels(1).map_err(|e| {

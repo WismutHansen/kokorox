@@ -410,7 +410,7 @@ impl TTSKoko {
 
         // First split by sentences - using common sentence ending punctuation
         let sentences: Vec<&str> = text
-            .split(|c| c == '.' || c == '?' || c == '!' || c == ';')
+            .split(['.', '?', '!', ';'])
             .filter(|s| !s.trim().is_empty())
             .collect();
 
@@ -591,7 +591,7 @@ impl TTSKoko {
                 let mut processed = chunk.to_string();
                 
                 // Handle digits, numerals, etc.
-                if chunk.chars().any(|c| c.is_digit(10)) {
+                if chunk.chars().any(|c| c.is_ascii_digit()) {
                     // Apply number expansion functions from normalize.rs
                     // We need to do some targeted number extraction and expansion
                     
@@ -779,7 +779,7 @@ impl TTSKoko {
             initial_silence,
         }: TTSOpts,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let audio = self.tts_raw_audio(&txt, lan, style_name, speed, initial_silence, auto_detect_language, force_style)?;
+        let audio = self.tts_raw_audio(txt, lan, style_name, speed, initial_silence, auto_detect_language, force_style)?;
 
         // Save to file
         if mono {
