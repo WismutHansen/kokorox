@@ -454,7 +454,7 @@ impl Phonemizer {
         // This addresses issues like "1939 to" directly at the phonemization level
         let preprocessed_text = {
             // Handle year ranges like "1939 to"
-            let mut processed = text.to_string();
+            let processed = text.to_string();
 
             // Check for problematic patterns that might be sentence breaks
             let patterns = [

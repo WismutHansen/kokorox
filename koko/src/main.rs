@@ -726,14 +726,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 
                 // We don't need these variables anymore since we use session_language and session_style
 
-                // Set up rodio for immediate streaming playback
-                if silent {
+                // Set up audio plumbing once; choose later whether to play it.
                 let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
-                let (_stream, stream_handle) = OutputStream::try_default()?;
-                let sink = Sink::try_new(&stream_handle)?;
-                let source = ChannelSource::new(rx, tts.sample_rate());
-                sink.append(source);
-                }
+                let (maybe_stream, maybe_sink) = if silent {
+                    (None, None)
+                } else {
+                    let (stream, handle) = OutputStream::try_default()?;
+                    let sink = Sink::try_new(&handle)?;
+                    let source = ChannelSource::new(rx, tts.sample_rate());
+                    sink.append(source);
+                    (Some(stream), Some(sink))
+                };
                 
                 // Configure TTS settings once at the beginning, but they can be updated
                 let mut session_language = lan.clone();
@@ -1329,11 +1332,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 
                 // Drop the sender to close the channel
-                drop(tx);
-                
+                drop(tx);                         // close channel so Sink drains
+                if let Some(sink) = maybe_sink {  // wait only when audio was playing
                 // Wait for all audio to finish playing
                 eprintln!("All text processed. Waiting for audio playback to complete...");
-                sink.sleep_until_end();
+                    sink.sleep_until_end();
+                }
+                
             }
         }
 
