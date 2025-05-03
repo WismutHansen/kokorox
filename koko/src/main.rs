@@ -189,7 +189,17 @@ struct Cli {
     )]
     data_path: String,
 
+    /// Silent Mode: If set to true, don't play audio when using Pipe  
+    #[arg(
+        short = 'x',
+        long = "silent",
+        value_name = "SILENT",
+        default_value_t = false 
+    )]
+    silent: bool,
+
     /// Which single voice to use or voices to combine to serve as the style of speech
+    ///
     /// For Spanish: ef_dora (female) or em_alex (male)
     /// For Portuguese: pf_dora (female) or pm_alex (male)
     /// For English: af_* (US female), am_* (US male), bf_* (UK female), bm_* (UK male)
@@ -596,6 +606,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             verbose,
             debug_accents,
             mode,
+            silent,
         } = cli;
 
         let tts = TTSKoko::new(&model_path, &data_path).await;
@@ -716,11 +727,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // We don't need these variables anymore since we use session_language and session_style
 
                 // Set up rodio for immediate streaming playback
+                if silent {
                 let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
                 let (_stream, stream_handle) = OutputStream::try_default()?;
                 let sink = Sink::try_new(&stream_handle)?;
                 let source = ChannelSource::new(rx, tts.sample_rate());
                 sink.append(source);
+                }
                 
                 // Configure TTS settings once at the beginning, but they can be updated
                 let mut session_language = lan.clone();
