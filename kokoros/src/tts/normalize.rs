@@ -75,9 +75,9 @@ fn expand_number(num_str: &str, language: &str) -> String {
 /// English number-to-word conversion
 fn expand_number_english(num_str: &str) -> String {
     // Handle special case for years
-    if num_str.len() == 4 && num_str.chars().all(|c| c.is_digit(10)) {
+    if num_str.len() == 4 && num_str.chars().all(|c| c.is_ascii_digit()) {
         let year = num_str.parse::<i32>().unwrap_or(0);
-        if year >= 1000 && year <= 2099 {
+        if (1000..=2099).contains(&year) {
             // Special cases: Check for specific years that are better spoken directly
             // (this avoids problems with year ranges at sentence boundaries)
             let special_cases = [1939, 1940, 1941, 1942, 1945, 2001, 2020];
@@ -456,12 +456,12 @@ fn expand_number_french(num_str: &str) -> String {
         }
         
         // Handle 70-79 (soixante-dix, soixante-onze, etc.)
-        if num >= 70 && num < 80 {
+        if (70..80).contains(&num) {
             return format!("soixante-{}", expand_number_french(&(num - 60).to_string()));
         }
         
         // Handle 90-99 (quatre-vingt-dix, quatre-vingt-onze, etc.)
-        if num >= 90 && num < 100 {
+        if (90..100).contains(&num) {
             return format!("quatre-vingt-{}", expand_number_french(&(num - 80).to_string()));
         }
         
@@ -635,7 +635,7 @@ fn expand_decimal(num_str: &str, language: &str) -> String {
         // Say each digit individually for the decimal part
         let mut decimal_words = point_word.to_string();
         for digit in decimal_part.chars() {
-            if digit.is_digit(10) {
+            if digit.is_ascii_digit() {
                 let digit_word = match digit {
                     '0' => match language {
                         lang if lang.starts_with("es") => "cero",
@@ -727,9 +727,9 @@ pub fn normalize_text(text: &str, language: &str) -> String {
     let mut text = text.to_string();
 
     // Replace special quotes and brackets
-    text = text.replace('\u{2018}', "'").replace('\u{2019}', "'");
+    text = text.replace(['\u{2018}', '\u{2019}'], "'");
     text = text.replace('«', "\u{201C}").replace('»', "\u{201D}");
-    text = text.replace('\u{201C}', "\"").replace('\u{201D}', "\"");
+    text = text.replace(['\u{201C}', '\u{201D}'], "\"");
     text = text.replace('(', "«").replace(')', "»");
 
     // Replace Chinese/Japanese punctuation

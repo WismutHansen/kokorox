@@ -13,7 +13,6 @@ use std::{
     io::Write,
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
-use sentence_segmentation;
 use regex::Regex;
 
 struct ChannelSource {
@@ -641,12 +640,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Mode::Text { text, save_path } => {
                 let s = std::time::Instant::now();
                 tts.tts(TTSOpts {
-                    txt: &text,
+                    txt: text,
                     lan: &lan,
                     auto_detect_language: auto_detect,
                     force_style,
                     style_name: &style,
-                    save_path: &save_path,
+                    save_path,
                     mono,
                     speed,
                     initial_silence,
@@ -756,7 +755,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 // Also create a WAV file to write the output.
-                let mut wav_file = std::fs::File::create(&output_path)?;
+                let mut wav_file = std::fs::File::create(output_path)?;
                 let header = WavHeader::new(1, tts.sample_rate(), 32);
                 header.write_header(&mut wav_file)?;
                 wav_file.flush()?;
@@ -784,15 +783,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     
                     // Immediately verify UTF-8 validity and fix any potential issues
-                    if !String::from_utf8(line.clone().into_bytes()).is_ok() {
+                    if String::from_utf8(line.clone().into_bytes()).is_err() {
                         eprintln!("WARNING: Invalid UTF-8 detected in input. Attempting to fix...");
                         // Use the lossy conversion to handle invalid UTF-8
-                        line = String::from_utf8_lossy(&line.as_bytes().to_vec()).to_string();
+                        line = String::from_utf8_lossy(line.as_bytes()).to_string();
                     }
                     
                     if verbose || debug_accents {
                         // Check specifically for encoding issues by comparing bytes vs chars
-                        let bytes_count = line.bytes().count();
+                        let bytes_count = line.len();
                         let chars_count = line.chars().count();
                         eprintln!("ENCODING ANALYSIS: Bytes: {}, Chars: {}, Difference: {}", 
                                 bytes_count, chars_count, bytes_count - chars_count);
@@ -946,11 +945,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         
                         for c in buffer.chars() {
                             current.push(c);
-                            if c == '。' || c == '！' || c == '？' || c == '.' || c == '!' || c == '?' {
-                                if !current.trim().is_empty() {
-                                    cjk_sentences.push(current.clone());
-                                    current.clear();
-                                }
+                            if (c == '。' || c == '！' || c == '？' || c == '.' || c == '!' || c == '?') && !current.trim().is_empty() {
+                                cjk_sentences.push(current.clone());
+                                current.clear();
                             }
                         }
                         
@@ -1133,10 +1130,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         
                         // Always check for UTF-8 validity before processing
-                        if !String::from_utf8(text_to_process.clone().into_bytes()).is_ok() {
+                        if String::from_utf8(text_to_process.clone().into_bytes()).is_err() {
                             eprintln!("WARNING: Invalid UTF-8 detected in segment {}. Attempting to fix...", i);
                             // Use lossy conversion to replace invalid sequences
-                            text_to_process = String::from_utf8_lossy(&text_to_process.as_bytes().to_vec()).to_string();
+                            text_to_process = String::from_utf8_lossy(text_to_process.as_bytes()).to_string();
                         }
                         
                         // Check if there are accented characters already
@@ -1250,10 +1247,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     
                     // Always check for UTF-8 validity before processing
-                    if !String::from_utf8(final_text.clone().into_bytes()).is_ok() {
+                    if String::from_utf8(final_text.clone().into_bytes()).is_err() {
                         eprintln!("WARNING: Invalid UTF-8 detected in final text. Attempting to fix...");
                         // Use lossy conversion to replace invalid sequences
-                        final_text = String::from_utf8_lossy(&final_text.as_bytes().to_vec()).to_string();
+                        final_text = String::from_utf8_lossy(final_text.as_bytes()).to_string();
                     }
                     
                     // Check if there are already accented characters
