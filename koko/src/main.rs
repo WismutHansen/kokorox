@@ -448,7 +448,7 @@ fn postprocess_sentences(sentences: &[String], verbose: bool) -> Vec<String> {
 
 /// Custom sentence segmentation function that preserves UTF-8 characters
 /// This is a replacement for the sentence_segmentation library to fix the
-/// loss of accented characters during processing.
+/// loss of accented characters during processing and preserve apostrophes.
 fn utf8_safe_sentence_segmentation(text: &str, language: &str, verbose: bool, debug_accents: bool) -> Vec<String> {
     // Only log when debug flags are enabled
     if verbose || debug_accents {
@@ -789,6 +789,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         line = String::from_utf8_lossy(line.as_bytes()).to_string();
                     }
                     
+                    // Debug print the raw input before any processing
+                    if verbose {
+                        eprintln!("RAW INPUT: '{}'", line);
+                        for (i, c) in line.chars().enumerate() {
+                            eprintln!("  Char {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                        }
+                    }
+                    
                     if verbose || debug_accents {
                         // Check specifically for encoding issues by comparing bytes vs chars
                         let bytes_count = line.len();
@@ -979,6 +987,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // This is needed even though we have the improved segmentation to ensure the model handles the text properly
                         if verbose {
                             println!("APPLYING PREPROCESSING to handle problematic patterns in: {}", buffer);
+                            
+                            // Debug special characters
+                            for (i, c) in buffer.chars().enumerate() {
+                                if c == '\'' {
+                                    println!("FOUND APOSTROPHE: at position {}: '{}' (Unicode: U+{:04X})", 
+                                             i, c, c as u32);
+                                }
+                            }
                         }
                         
                         // First, check for directly connected year+to patterns and separate them
@@ -987,9 +1003,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 .replace("1941to", "1941 to")
                                                 .replace("1942to", "1942 to")
                                                 .replace("1945to", "1945 to");
+                        
+                        // Very important: Don't let the sentence_segmentation library process the text
+                        // directly, as it causes issues with apostrophes. Let's pre-process it ourselves.
+                        let pre_processed = if buffer_fixed.contains('\'') {
+                            if verbose {
+                                println!("PRESERVING APOSTROPHES: Text contains apostrophes that need protection");
+                            }
+                            // Use a special ASCII code that we'll replace back after segmentation
+                            buffer_fixed.replace('\'', "__APOSTROPHE__")
+                        } else {
+                            buffer_fixed
+                        };
                                                 
                         // Use our UTF-8 safe sentence segmentation function with proper language handling
-                        let sentences = utf8_safe_sentence_segmentation(&buffer_fixed, &session_language, verbose, debug_accents);
+                        let mut sentences = utf8_safe_sentence_segmentation(&pre_processed, &session_language, verbose, debug_accents);
+                        
+                        // Restore any apostrophes that were temporarily replaced
+                        if pre_processed.contains("__APOSTROPHE__") {
+                            if verbose {
+                                println!("RESTORING APOSTROPHES: Replacing placeholders with actual apostrophes");
+                            }
+                            for i in 0..sentences.len() {
+                                sentences[i] = sentences[i].replace("__APOSTROPHE__", "'");
+                            }
+                        }
                         
                         if verbose {
                             println!("SEGMENTATION COMPLETE: Found {} potential sentences", sentences.len());

@@ -25,6 +25,8 @@ lazy_static! {
     static ref X_POSSESSIVE_RE: Regex = Regex::new(r"(?<=X')S\b").unwrap();
     static ref INITIALS_RE: Regex = Regex::new(r"(?:[A-Za-z]\.){2,} [a-z]").unwrap();
     static ref ACRONYM_RE: Regex = Regex::new(r"(?i)(?<=[A-Z])\.(?=[A-Z])").unwrap();
+    // Special quotes regex - preserve apostrophes instead of replacing them
+    static ref QUOTES_RE: Regex = Regex::new(r"[\u{2018}\u{2019}]").unwrap();
 }
 
 /// Public function for direct use by TTS for number expansion
@@ -726,8 +728,50 @@ pub fn normalize_text(text: &str, language: &str) -> String {
     
     let mut text = text.to_string();
 
-    // Replace special quotes and brackets
-    text = text.replace(['\u{2018}', '\u{2019}'], "'");
+    // Replace special quotes and brackets, preserving apostrophes
+    // Check if there are apostrophes in the text before processing
+    let has_apostrophes = text.contains('\'');
+    
+    // Only apply apostrophe-safe replacement if apostrophes are detected
+    if has_apostrophes {
+        // First handle regular quotes safely by checking context
+        text = QUOTES_RE.replace_all(&text, |caps: &regex::Captures| {
+            let quote = &caps[0];
+            let quote_pos = text.find(quote).unwrap_or(0);
+            
+            // Check if this appears to be an apostrophe (surrounded by letters)
+            let is_apostrophe = if quote_pos > 0 && quote_pos < text.len() - 1 {
+                let chars: Vec<char> = text.chars().collect();
+                let prev = chars.get(quote_pos - 1).unwrap_or(&' ');
+                let next = chars.get(quote_pos + 1).unwrap_or(&' ');
+                
+                // Apostrophe pattern: letter+'+'letter or letter+'+s
+                (prev.is_alphabetic() && (next.is_alphabetic() || *next == 's')) ||
+                // "I'm", "you're", "he'll", etc.
+                (*prev == 'I' && *next == 'm') ||
+                (text[quote_pos..].starts_with("'m") || 
+                 text[quote_pos..].starts_with("'re") || 
+                 text[quote_pos..].starts_with("'ve") || 
+                 text[quote_pos..].starts_with("'ll") || 
+                 text[quote_pos..].starts_with("'d"))
+            } else {
+                false
+            };
+            
+            if is_apostrophe {
+                // Preserve apostrophes
+                "'"
+            } else {
+                // Replace quotes with regular quote
+                "\""
+            }
+        }).to_string();
+    } else {
+        // No apostrophes detected, use the original replacement
+        text = text.replace(['\u{2018}', '\u{2019}'], "'");
+    }
+    
+    // Handle other quotes and brackets
     text = text.replace('«', "\u{201C}").replace('»', "\u{201D}");
     text = text.replace(['\u{201C}', '\u{201D}'], "\"");
     text = text.replace('(', "«").replace(')', "»");
