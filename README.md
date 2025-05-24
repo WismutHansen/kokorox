@@ -1,243 +1,363 @@
-<h1 align="center">Kokoros - Kokoro Text-to-Speech in Rust</h1>
+<h1 align="center">kokorox - kokoro text-to-speech in Rust</h1>
 
 [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) is a trending top 2 TTS model on huggingface.
 This repo provides **insanely fast Kokoro infer in Rust**, you can now have your built TTS engine powered by Kokoro and infer fast by only a command of `koko`.
 
-`kokoros` is a `rust` crate that provides easy to use TTS ability.
-One can directly call `koko` in terminal to synthesize audio.
+`kokorox` (the library crate) and `koko` (the CLI application) provide easy-to-use Text-to-Speech capabilities.
+`koko` uses a relatively small model (87M parameters) yet delivers extremely good quality voice results.
 
-`kokoros` uses a relative small model 87M params, while results in extremly good quality voices results.
+Language support includes:
 
-Languge support:
-
-- [x] English;
-- [x] Chinese (partly);
-- [x] Spanish (partly);
-- [x] Japanese (partly);
-- [x] German (partly);
+- [x] English
+- [x] Chinese (Mandarin)
+- [x] Spanish (with improved accent and phoneme handling)
+- [x] Japanese
+- [x] German
+- [x] French
+- [x] And more via espeak-ng integration and automatic language detection.
 
 ## Updates
 
-- **_`2025.05.24`_**: **Added new cli parameter and endpoints audio/voices and audio/voices_detailed** You can list the available voices via the koko CLI.
+- **_`LATEST`_**:
+  - **New CLI command `koko voices`**: List available voice styles with options for JSON, list, or table format, and filtering by language or gender.
+  - **New OpenAI server endpoints**:
+    - `/v1/audio/voices`: Lists available voice IDs.
+    - `/v1/audio/voices/detailed`: Provides detailed information about each voice (name, description, language, gender).
+  - **Improved Spanish Language Support**: Enhanced accent restoration and phoneme correction for more natural Spanish speech.
+  - **Enhanced Text Processing**:
+    - More robust sentence segmentation, especially for texts with year ranges and complex structures, and better UTF-8 handling for accented characters.
+    - New debugging flags:
+      - `--verbose`: Enable verbose debug logs for text processing stages.
+      - `--debug-accents`: Enable detailed character-by-character analysis for non-English languages with accents.
+  - **Pipe Mode Enhancement**: Added `--silent` flag to `pipe` mode to suppress audio playback, useful when only saving to file.
+  - **Automatic `force-style`**: If you specify a `--style` different from the default (`af_heart`), `--force-style` is now automatically enabled to ensure your chosen style is used.
 - **_`2025.03.23`_**: **Piping now supports incoming streamed text from LLMs** The audio generation will now start once the first complete sentence is detected, making audio playback even faster.
-- **_`2025.03.22`_**: **Piping with direct playback supported.** You can now use `pipe` to use pipes to send text to kokoros, which will be split into sentences and the output will start to play once the first sentence has been generated.
+- **_`2025.03.22`_**: **Piping with direct playback supported.** You can now use `pipe` to send text to `koko`, which will be split into sentences and the output will start to play once the first sentence has been generated.
 - **_`2025.01.22`_**: **Streaming mode supported.** You can now using `--stream` to have fun with stream mode, kudos to [mroigo](https://github.com/mrorigo);
 - **_`2025.01.17`_**: Style mixing supported! Now, listen the output AMSR effect by simply specific style: `af_sky.4+af_nicole.5`;
 - **_`2025.01.15`_**: OpenAI compatible server supported, openai format still under polish!
-- **_`2025.01.15`_**: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
+- **_`2025.01.15`_**: Phonemizer supported! Now `koko` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
 - **_`2025.01.13`_**: Espeak-ng tokenizer and phonemizer supported! Kudos to [@mindreframer](https://github.com/mindreframer) ;
-- **_`2025.01.12`_**: Released `Kokoros`;
+- **_`2025.01.12`_**: Released `kokorox`;
 
 ## Installation
 
-1. Install required dependencies:
+### 1. Pre-built Binaries (Recommended for most users)
 
-   **System Dependencies:**
+Pre-built binaries for Linux, macOS, and Windows are available on the [**GitHub Releases page**](https://github.com/WismutHansen/kokorox/releases). Download the appropriate archive for your system, extract it, and you'll find the `koko` executable.
 
-   - **Ubuntu/Debian**: `sudo apt-get install espeak-ng libespeak-ng-dev`
-   - **macOS**: `brew install espeak-ng`
-   - **Windows**: Install espeak-ng from [the official repository](https://github.com/espeak-ng/espeak-ng/releases)
+### 2. Install System Dependencies (if building from source or using certain features)
 
-2. Install required Python packages:
+These are primarily for `espeak-ng` which powers the phonemization:
 
-```bash
-pip install -r scripts/requirements.txt
-```
+- **Ubuntu/Debian**: `sudo apt-get install espeak-ng libespeak-ng-dev`
+- **macOS**: `brew install espeak-ng`
+- **Windows**: Install espeak-ng from [the official repository](https://github.com/espeak-ng/espeak-ng/releases)
 
-3. Download model and voices:
+### 3. Install Python and Download Models (if building from source or needing models)
 
-```bash
-# Download all required resources (recommended)
+If you plan to build from source or need to download the TTS models:
+a. Install Python (3.10+ recommended).
+b. Install required Python packages:
+`bash
+      pip install -r scripts/requirements.txt
+      `
+c. Download model and voices:
+
+````bash # Download all required resources (recommended: model, default voices)
 python scripts/download_voices.py --all
 
-# Or download specific resources
-python scripts/download_voices.py --model   # Download only the model
-python scripts/download_voices.py --voices  # Download only the voices
+      # Or download specific resources
+      # python scripts/download_voices.py --model   # Download only the model
+      # python scripts/download_voices.py --voices  # Download only the voices
 
-# List supported languages
-python scripts/download_voices.py --list-languages
-```
+      # List supported languages for informational purposes
+      # python scripts/download_voices.py --list-languages
+      ```
+      This will place `kokoro-v1.0.onnx` in `checkpoints/` and `voices-v1.0.bin` in `data/`.
 
-4. Build the project:
+### 4. Build from Source (Optional)
+
+If you prefer to build from source:
+a. Ensure you have Rust installed (see [rustup.rs](https://rustup.rs/)).
+b. Clone the repository: `git clone https://github.com/WismutHansen/kokorox.git`
+c. `cd kokorox`
+d. Build the project:
+`bash
+      cargo build --release
+      `
+The executable will be at `target/release/koko`.
+
+### 5. All-in-One Download and Build Script (for source builds)
+
+Alternatively, you can use the `download_all.sh` script to automate Python dependency installation, model downloads, and the Rust build:
 
 ```bash
-cargo build --release
-```
+./download_all.sh --build
+````
 
 ## Usage
+
+After installation (either by downloading a pre-built binary or building from source), you can use the `koko` CLI. If you built from source, replace `./koko` with `target/release/koko`.
 
 ### View available options
 
 ```bash
-./target/release/koko -h
+./koko -h
 ```
 
 ### Generate speech for some text
 
-```
-./target/release/koko text "Hello, this is a TTS test"
+```bash
+./koko text "Hello, this is a TTS test"
 ```
 
-The generated audio will be saved to `tmp/output.wav` by default. You can customize the save location with the `--output` or `-o` option:
+The generated audio will be saved to `tmp/output.wav` by default. Customize the save location with `--output` or `-o`:
 
-```
-./target/release/koko text "I hope you're having a great day today!" --output greeting.wav
+```bash
+./koko text "I hope you're having a great day today!" -o greeting.wav
 ```
 
 ### Multi-language support
 
-Kokoros supports multiple languages including English, Chinese, Japanese, German, French, and more.
+Kokorox supports multiple languages. You can either specify the language manually or use automatic detection.
 
-#### Specify language manually
+**Language and Style Interaction:**
 
-Use the `--lan` or `-l` option to specify the language:
+- Use `--lan <LANGUAGE_CODE>` to specify a language (e.g., `en-us`, `es`, `zh`).
+- Use `--auto-detect` (or `-a`) to let `koko` try to determine the language from the input text. If detection fails, it falls back to the language specified by `--lan` (default `en-us`).
+- Use `--style <VOICE_ID>` to choose a specific voice.
+- By default, `koko` attempts to pick a voice appropriate for the detected or specified language.
+- If you set `--style` to a value different from the default (`af_heart`), `--force-style` will be automatically enabled, meaning your chosen style will be used regardless of the detected/specified language.
+- You can explicitly use `--force-style` to make `koko` use the voice specified by `--style` even if it doesn't match the language.
 
-```
-./target/release/koko text "你好，世界!" --lan zh
-./target/release/koko text "こんにちは、世界!" --lan ja
-./target/release/koko text "Hallo, Welt!" --lan de
-```
-
-#### Automatic language detection
-
-Use the `--auto-detect` or `-a` flag to automatically detect the language:
-
-```
-./target/release/koko -a text "Hello, world!"   # Will detect English
-./target/release/koko -a text "你好，世界!"      # Will detect Chinese
-./target/release/koko -a text "こんにちは、世界!" # Will detect Japanese
-```
-
-The language detection is powered by the `whatlang` library and supports a wide range of languages.
-
-### Additional Voices
-
-The default installation includes a limited set of voices. However, you can access the full set of voices (54 voices across 8 languages) from the original Kokoro model on Hugging Face.
-
-#### Downloading and converting additional voices
+**Examples:**
 
 ```bash
-# List available languages
-python scripts/convert_pt_voices.py --list-languages
+# Specify language manually
+./koko text "你好，世界!" --lan zh
+./koko text "こんにちは、世界!" --lan ja
+./koko text "Hola, mundo. Esto es una prueba." --lan es --style ef_dora # Good Spanish voice
 
-# List voices for a specific language
-python scripts/convert_pt_voices.py --list-voices en
+# Automatic language detection
+./koko -a text "Hello, world!"   # Will detect English
+./koko -a text "你好，世界!"      # Will detect Chinese
 
-# Download, convert, and combine all voices (recommended)
-python scripts/convert_pt_voices.py --all
+# Using a specific style (implicitly enables --force-style if style is not default)
+./koko text "This is a test." --style am_michael
 
-# Or perform steps individually
-python scripts/convert_pt_voices.py --download-all
-python scripts/convert_pt_voices.py --convert-all
-python scripts/convert_pt_voices.py --combine
+# Explicitly force a style, even if language is different
+./koko text "Esto es una prueba en español." --lan es --style af_sky --force-style
 ```
 
-#### Using custom voices
+### Debugging Text Processing
 
-After converting the voices, you can use them by specifying the custom voices file:
+For complex text or non-English languages, you might encounter issues. Use these flags to help debug:
+
+- `--verbose`: Prints detailed logs about text normalization, phonemization, and segmentation steps.
+- `--debug-accents`: Provides character-by-character analysis for text containing non-ASCII (e.g., accented) characters, showing how they are handled.
 
 ```bash
-./target/release/koko -d data/voices-custom.bin text "Your text here"
+./koko text "Una política económica." --lan es --style ef_dora --verbose --debug-accents
 ```
 
-You can also combine automatic language detection with custom voices:
+### List Available Voices
+
+Use the `voices` subcommand to see which voice styles are available in your `voices-v1.0.bin` (or custom voices file).
 
 ```bash
-./target/release/koko -a -d data/voices-custom.bin text "Multilingual text here"
+# Default table format
+./koko voices
+
+# JSON format
+./koko voices --format json
+
+# Simple list of IDs
+./koko voices --format list
+
+# Filter by language (e.g., English voices)
+./koko voices --language en
+
+# Filter by gender (e.g., male voices)
+./koko voices --gender male
+
+# Combine filters (e.g., Spanish female voices)
+./koko voices --language es --gender female
 ```
 
 ### Generate speech for each line in a file
 
-```
-./target/release/koko file poem.txt
-```
-
-For a file with 3 lines of text, by default, speech audio files `tmp/output_0.wav`, `tmp/output_1.wav`, `tmp/output_2.wav` will be outputted. You can customize the save location with the `--output` or `-o` option, using `{line}` as the line number:
-
-```
-./target/release/koko file lyrics.txt -o "song/lyric_{line}.wav"
+```bash
+./koko file poem.txt
 ```
 
-### Use pipe to route any text to Kokoros and have it played back as soon as the first sentence has been generated
+For a file with 3 lines, output files `tmp/output_0.wav`, `tmp/output_1.wav`, `tmp/output_2.wav` are created. Customize with `-o`:
 
-For example, you can have the ouput from ollama be read out loud for you:
-
+```bash
+./koko file lyrics.txt -o "song/lyric_{line}.wav"
 ```
-ollama run llama3.2:latest "why is the sky blue?" | ./target/release/koko pipe
+
+### Use pipe for live audio playback from text streams
+
+Route text from other programs (like LLMs) to `koko` and have it played back as sentences are generated.
+
+```bash
+ollama run llama3 "Tell me a short story about a brave robot." | ./koko pipe
+
+# To save to file and not play audio:
+ollama run llama3 "Explain quantum physics." | ./koko pipe --silent -o quantum.wav
 ```
 
 ### OpenAI-Compatible Server
 
 1. Start the server:
 
+   ```bash
+   ./koko openai --ip 0.0.0.0 --port 3000
+   ```
+
+2. Make API requests:
+
+   **Synthesize Speech:**
+
+   ```bash
+   curl -X POST http://localhost:3000/v1/audio/speech \
+     -H "Content-Type: application/json" \
+     -d '{
+       "model": "kokoro",
+       "input": "Hello, this is a test of the Kokoro TTS system!",
+       "voice": "af_sky",
+       "language": "en-us",
+       "response_format": "wav"
+     }' \
+     --output sky-says-hello.wav
+   ```
+
+   Supported `response_format`: `wav` (default), `mp3`.
+
+   **List Voice IDs:**
+
+   ```bash
+   curl http://localhost:3000/v1/audio/voices
+   ```
+
+   Example Output:
+
+   ```json
+   {
+     "voices": ["af_heart", "af_sky", "ef_dora", "em_alex", "..."]
+   }
+   ```
+
+   **List Detailed Voice Information:**
+
+   ```bash
+   curl http://localhost:3000/v1/audio/voices/detailed
+   ```
+
+   Example Output:
+
+   ```json
+   {
+     "voices": [
+       {
+         "id": "af_heart",
+         "name": "Heart (Female)",
+         "description": "English (US) female voice",
+         "language": "English (US)",
+         "gender": "female"
+       }
+       // ... more voices
+     ]
+   }
+   ```
+
+   You can also use the Python test script: `python scripts/test_server.py speak "Test message"`
+
+### Streaming (line-by-line from stdin to stdout WAV)
+
+The `stream` option reads lines from stdin and outputs WAV audio to stdout.
+
 ```bash
-./target/release/koko openai
+# Typing manually, saving to file
+./koko stream > live-audio.wav
+# (Type text, press Enter. Ctrl+D to exit)
+
+# Input from another source
+echo "This is a line of text." | ./koko stream > programmatic-audio.wav
 ```
 
-2. Make API requests using either curl or Python:
+### Docker Usage
 
-Using curl:
+1. Build the image:
+
+   ```bash
+   docker build -t kokorox .
+   ```
+
+2. Run the image:
+
+   ```bash
+   # Basic text to speech (ensure ./tmp exists or change output path)
+   docker run -v ./tmp:/app/tmp kokorox text "Hello from docker!" -o tmp/hello.wav
+
+   # OpenAI server (bind port, models must be in image or mounted)
+   # The default Dockerfile copies models from ./checkpoints and ./data
+   docker run -p 3000:3000 kokorox openai --ip 0.0.0.0 --port 3000
+   ```
+
+### Additional Voices (from Hugging Face PyTorch models)
+
+The default installation includes a standard set of voices. The original Kokoro model on Hugging Face has more voices (54 voices in 8 languages) that can be converted.
+
+1. **List available languages/voices from Hugging Face:**
+
+   ```bash
+   python scripts/convert_pt_voices.py --list-languages
+   python scripts/convert_pt_voices.py --list-voices en
+   ```
+
+2. **Download, convert, and combine all Hugging Face voices:**
+
+   ```bash
+   python scripts/convert_pt_voices.py --all
+   ```
+
+   This creates `data/voices-custom.bin`.
+
+3. **Use custom voices file with `koko`:**
+
+   ```bash
+   ./koko -d data/voices-custom.bin text "Using a custom voice." --style en_sarah # Example custom style
+   ```
+
+   You can list voices from a custom file:
+
+   ```bash
+   ./koko -d data/voices-custom.bin voices
+   ```
+
+## Troubleshooting
+
+### ONNX Runtime Mutex Errors / Crashes on Exit
+
+Some users, particularly on certain Linux distributions or when interrupting the program, might experience crashes related to ONNX Runtime's internal thread management during shutdown. While the audio generation is usually complete, the crash can be disruptive.
+
+You can use the `run_kokoros.sh` wrapper script (Linux/macOS) to mitigate this:
 
 ```bash
-curl -X POST http://localhost:3000/v1/audio/speech \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "anything can go here",
-    "input": "Hello, this is a test of the Kokoro TTS system!",
-    "voice": "af_sky"
-  }'
-  --output sky-says-hello.wav
+./run_kokoros.sh text "This should exit more gracefully."
 ```
 
-Using Python:
-
-```bash
-python scripts/run_openai.py
-```
-
-### Streaming
-
-The `stream` option will start the program, reading for lines of input from stdin and outputting WAV audio to stdout.
-
-Use it in conjunction with piping.
-
-#### Typing manually
-
-```
-./target/release/koko stream > live-audio.wav
-# Start typing some text to generate speech for and hit enter to submit
-# Speech will append to `live-audio.wav` as it is generated
-# Hit Ctrl D to exit
-```
-
-#### Input from another source
-
-```
-echo "Suppose some other program was outputting lines of text" | ./target/release/koko stream > programmatic-audio.wav
-```
-
-### With docker
-
-1. Build the image
-
-```bash
-docker build -t kokoros .
-```
-
-2. Run the image, passing options as described above
-
-```bash
-# Basic text to speech
-docker run -v ./tmp:/app/tmp kokoros text "Hello from docker!" -o tmp/hello.wav
-
-# An OpenAI server (with appropriately bound port)
-docker run -p 3000:3000 kokoros openai
-```
+This script catches the abrupt termination and allows your shell to continue normally.
 
 ## Roadmap
 
-Due to Kokoro actually not finalizing it's ability, this repo will keep tracking the status of Kokoro, and helpfully we can have language support incuding: English, Mandarin, Japanese, German, French etc.
+- Continue improving multi-language support, focusing on phoneme accuracy and naturalness for supported languages.
+- Enhance text normalization for a wider range of inputs.
+- Explore further optimizations for speed and resource usage.
+- Community feedback will guide further development.
 
 ## Copyright
 
-Copyright reserved by Lucas Jin under Apache License.
+Copyright © Lucas Jin, Tommy Falkowski. Licensed under the Apache License, Version 2.0.

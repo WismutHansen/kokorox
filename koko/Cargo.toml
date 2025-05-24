@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2021"
 repository = "https://github.com/WismutHansen/kokorox.git"
 homepage = "https://github.com/WismutHansen/kokorox"
-authors = ["lucasjinreal", "Tommy Falkowski"]
+authors = ["Lucas Jin", "Tommy Falkowski"]
 description = "Lightning fast text-to-speech CLI using the Kokoro model in rust"
 
 [package.metadata.wix]
