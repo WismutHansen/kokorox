@@ -1,7 +1,11 @@
 [package]
-name = "kokoros"
+name = "kokorox"
 version = "0.1.1"
 edition = "2021"
+homepage = "https://github.com/WismutHansen/kokorox"
+resolver = "2"
+authors = ["lucasjinreal", "Tommy Falkowski"]
+description = "Lightning fast text-to-speech with the Kokoro model in rust"
 
 [dependencies]
 espeak-rs = "0.1.9"

@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use kokoros::{
+use kokorox::{
     tts::koko::{TTSKoko, TTSOpts},
     utils::wav::{write_audio_chunk, WavHeader},
 };
@@ -150,7 +150,7 @@ enum Mode {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "kokoros")]
+#[command(name = "kokorox")]
 #[command(version = "0.1")]
 #[command(author = "Lucas Jin")]
 struct Cli {
@@ -841,11 +841,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             Mode::OpenAI { ip, port } => {
-                let app = kokoros_openai::create_server(tts.clone()).await;
+                let app = kokorox_openai::create_server(tts.clone()).await;
                 let addr = SocketAddr::from((*ip, *port));
                 let binding = tokio::net::TcpListener::bind(&addr).await?;
                 println!("Starting OpenAI-compatible HTTP server on {addr}");
-                kokoros_openai::serve(binding, app.into_make_service()).await?;
+                kokorox_openai::serve(binding, app.into_make_service()).await?;
                 
                 // Clean up resources before exit
                 tts.cleanup();
@@ -1094,7 +1094,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 eprintln!("Auto-detecting language from initial text...");
                             }
                             
-                            if let Some(detected) = kokoros::tts::phonemizer::detect_language(&buffer) {
+                            if let Some(detected) = kokorox::tts::phonemizer::detect_language(&buffer) {
                                 eprintln!("Detected language: {}", detected);
                                 session_language = detected;
                             } else {
@@ -1113,7 +1113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         } else {
                             // When not forcing, select an appropriate voice for the language
                             let is_custom = tts.is_using_custom_voices(tts.voices_path());
-                            let default_style = kokoros::tts::phonemizer::get_default_voice_for_language(&session_language, is_custom);
+                            let default_style = kokorox::tts::phonemizer::get_default_voice_for_language(&session_language, is_custom);
                             // Always show the selected voice, this is important information
                             eprintln!("Selected language-appropriate voice style: {}", default_style);
                             session_style = default_style;
@@ -1374,8 +1374,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 eprintln!("SEGMENT {} NO ACCENTS: No accented characters found, will attempt restoration", i);
                             }
                             
-                            // Use kokoros restore_spanish_accents to fix lost accents
-                            let restored = kokoros::tts::koko::restore_spanish_accents(&text_to_process);
+                            // Use kokorox restore_spanish_accents to fix lost accents
+                            let restored = kokorox::tts::koko::restore_spanish_accents(&text_to_process);
                             
                             // Compare before and after restoration
                             if restored != text_to_process {
@@ -1492,7 +1492,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         
                         // Use our UTF-8 safe accent restoration
-                        let restored = kokoros::tts::koko::restore_spanish_accents(&final_text);
+                        let restored = kokorox::tts::koko::restore_spanish_accents(&final_text);
                         
                         // Compare before and after restoration
                         if restored != final_text {

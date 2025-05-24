@@ -4,7 +4,7 @@ use std::io::{self};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{extract::State, routing::get, routing::post, Json, Router};
-use kokoros::{
+use kokorox::{
     tts::koko::{InitConfig as TTSKokoInitConfig, TTSKoko},
     utils::mp3::pcm_to_mp3,
     utils::wav::{write_audio_chunk, WavHeader},
@@ -136,16 +136,16 @@ async fn get_voices(State(tts): State<TTSKoko>) -> Json<VoicesResponse> {
     // Get the available voices from the TTSKoko instance
     let mut voices = tts.get_available_voices();
     voices.sort();
-    
+
     Json(VoicesResponse { voices })
 }
 
 async fn get_voices_detailed(State(tts): State<TTSKoko>) -> Json<VoicesDetailedResponse> {
     // Get the available voices from the TTSKoko instance
     let voice_styles = tts.get_available_voices();
-    
+
     let mut voices = Vec::new();
-    
+
     for voice_id in voice_styles {
         let (name, description, language, gender) = parse_voice_info(&voice_id);
         voices.push(VoiceInfo {
@@ -156,21 +156,22 @@ async fn get_voices_detailed(State(tts): State<TTSKoko>) -> Json<VoicesDetailedR
             gender,
         });
     }
-    
+
     // Sort voices by language and then by gender
     voices.sort_by(|a, b| {
-        a.language.cmp(&b.language)
+        a.language
+            .cmp(&b.language)
             .then(a.gender.cmp(&b.gender))
             .then(a.name.cmp(&b.name))
     });
-    
+
     Json(VoicesDetailedResponse { voices })
 }
 
 fn parse_voice_info(voice_id: &str) -> (String, String, String, String) {
     // Parse voice ID patterns like "af_heart", "em_alex", "zf_xiaoxiao"
     // Format: [language_prefix][gender][_name]
-    
+
     let parts: Vec<&str> = voice_id.split('_').collect();
     if parts.len() < 2 {
         return (
@@ -180,30 +181,30 @@ fn parse_voice_info(voice_id: &str) -> (String, String, String, String) {
             "unknown".to_string(),
         );
     }
-    
+
     let prefix = parts[0];
     let name = parts[1..].join("_");
-    
+
     let (language_code, gender) = if prefix.len() >= 2 {
-        let lang_part = &prefix[..prefix.len()-1];
-        let gender_part = &prefix[prefix.len()-1..];
-        
+        let lang_part = &prefix[..prefix.len() - 1];
+        let gender_part = &prefix[prefix.len() - 1..];
+
         let gender = match gender_part {
             "f" => "female",
             "m" => "male",
             _ => "unknown",
         };
-        
+
         (lang_part, gender)
     } else {
         (prefix, "unknown")
     };
-    
+
     let language = match language_code {
         "a" => "English (US)",
         "b" => "English (UK)",
         "e" => "Spanish",
-        "p" => "Portuguese", 
+        "p" => "Portuguese",
         "f" => "French",
         "i" => "Italian",
         "d" => "German",
@@ -214,15 +215,32 @@ fn parse_voice_info(voice_id: &str) -> (String, String, String, String) {
         "h" => "Hindi",
         _ => "Unknown",
     };
-    
-    let display_name = format!("{} ({})", 
-        name.chars().next().unwrap_or('a').to_uppercase().to_string() + &name[1..],
-        gender.chars().next().unwrap_or('u').to_uppercase().to_string() + &gender[1..]
+
+    let display_name = format!(
+        "{} ({})",
+        name.chars()
+            .next()
+            .unwrap_or('a')
+            .to_uppercase()
+            .to_string()
+            + &name[1..],
+        gender
+            .chars()
+            .next()
+            .unwrap_or('u')
+            .to_uppercase()
+            .to_string()
+            + &gender[1..]
     );
-    
+
     let description = format!("{} {} voice", language, gender);
-    
-    (display_name, description, language.to_string(), gender.to_string())
+
+    (
+        display_name,
+        description,
+        language.to_string(),
+        gender.to_string(),
+    )
 }
 
 async fn handle_tts(

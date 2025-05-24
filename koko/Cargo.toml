@@ -2,10 +2,20 @@
 name = "koko"
 version = "0.1.1"
 edition = "2021"
+repository = "https://github.com/WismutHansen/kokorox.git"
+homepage = "https://github.com/WismutHansen/kokorox"
+authors = ["lucasjinreal", "Tommy Falkowski"]
+description = "Lightning fast text-to-speech CLI using the Kokoro model in rust"
+
+[package.metadata.wix]
+upgrade-guid = "336CE5A3-EB28-4A3A-A4C0-477194EBD0F6"
+path-guid = "05092137-AFB8-436C-9F40-EE8B9866D6ED"
+license = false
+eula = false
 
 [dependencies]
-kokoros = { path = "../kokoros" }
-kokoros-openai = { path = "../kokoros-openai" }
+kokorox = { path = "../kokorox" }
+kokorox-openai = { path = "../kokorox-openai" }
 
 clap = { version = "4.5.26", features = ["derive"] }
 tokio = { version = "1.0", features = ["io-util", "rt-multi-thread"] }
