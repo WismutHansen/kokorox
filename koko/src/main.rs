@@ -131,6 +131,22 @@ enum Mode {
         #[arg(long, default_value_t = 3000)]
         port: u16,
     },
+    
+    /// List all available voice styles
+    #[command(name = "voices", alias = "v", long_flag_aliases = ["voices"])]
+    Voices {
+        /// Output format: table (default), json, or list
+        #[arg(long, default_value = "table")]
+        format: String,
+        
+        /// Filter voices by language (e.g., en, es, zh, ja)
+        #[arg(long)]
+        language: Option<String>,
+        
+        /// Filter voices by gender (male, female)
+        #[arg(long)]
+        gender: Option<String>,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -446,6 +462,170 @@ fn postprocess_sentences(sentences: &[String], verbose: bool) -> Vec<String> {
     result
 }
 
+/// Display available voices in various formats
+fn display_voices(tts: &TTSKoko, format: &str, language_filter: Option<&str>, gender_filter: Option<&str>) {
+    let voice_ids = tts.get_available_voices();
+    
+    // Parse and filter voices
+    let mut voices: Vec<(String, String, String, String, String)> = voice_ids
+        .into_iter()
+        .map(|id| {
+            let (name, description, language, gender) = parse_voice_info_cli(&id);
+            (id, name, description, language, gender)
+        })
+        .filter(|(_, _, _, language, gender)| {
+            // Apply language filter
+            if let Some(lang_filter) = language_filter {
+                if !language.to_lowercase().contains(&lang_filter.to_lowercase()) &&
+                   !get_language_code(language).contains(&lang_filter.to_lowercase()) {
+                    return false;
+                }
+            }
+            
+            // Apply gender filter
+            if let Some(gender_filter) = gender_filter {
+                if !gender.to_lowercase().contains(&gender_filter.to_lowercase()) {
+                    return false;
+                }
+            }
+            
+            true
+        })
+        .collect();
+
+    // Sort voices
+    voices.sort_by(|a, b| {
+        a.3.cmp(&b.3)  // language
+            .then(a.4.cmp(&b.4))  // gender
+            .then(a.1.cmp(&b.1))  // name
+    });
+
+    match format {
+        "json" => {
+            println!("[");
+            for (i, (id, name, description, language, gender)) in voices.iter().enumerate() {
+                let comma = if i == voices.len() - 1 { "" } else { "," };
+                println!("  {{");
+                println!("    \"id\": \"{}\",", id);
+                println!("    \"name\": \"{}\",", name);
+                println!("    \"description\": \"{}\",", description);
+                println!("    \"language\": \"{}\",", language);
+                println!("    \"gender\": \"{}\"", gender);
+                println!("  }}{}", comma);
+            }
+            println!("]");
+        },
+        "list" => {
+            for (id, _, _, _, _) in voices {
+                println!("{}", id);
+            }
+        },
+        "table" | _ => {
+            // Calculate column widths
+            let id_width = voices.iter().map(|(id, _, _, _, _)| id.len()).max().unwrap_or(10).max(10);
+            let name_width = voices.iter().map(|(_, name, _, _, _)| name.len()).max().unwrap_or(15).max(15);
+            let lang_width = voices.iter().map(|(_, _, _, lang, _)| lang.len()).max().unwrap_or(12).max(12);
+            let gender_width = 8; // "Female" is 6 chars, so 8 is enough
+            
+            // Print header
+            println!("{:<width_id$} {:<width_name$} {:<width_lang$} {:<width_gender$} Description", 
+                     "Voice ID", "Name", "Language", "Gender",
+                     width_id = id_width,
+                     width_name = name_width, 
+                     width_lang = lang_width,
+                     width_gender = gender_width);
+            
+            println!("{} {} {} {} {}",
+                     "-".repeat(id_width),
+                     "-".repeat(name_width),
+                     "-".repeat(lang_width), 
+                     "-".repeat(gender_width),
+                     "-".repeat(20));
+            
+            // Print voices
+            for (id, name, description, language, gender) in voices {
+                println!("{:<width_id$} {:<width_name$} {:<width_lang$} {:<width_gender$} {}", 
+                         id, name, language, gender, description,
+                         width_id = id_width,
+                         width_name = name_width,
+                         width_lang = lang_width,
+                         width_gender = gender_width);
+            }
+        }
+    }
+}
+
+/// Parse voice info for CLI display
+fn parse_voice_info_cli(voice_id: &str) -> (String, String, String, String) {
+    let parts: Vec<&str> = voice_id.split('_').collect();
+    if parts.len() < 2 {
+        return (
+            voice_id.to_string(),
+            format!("Voice {}", voice_id),
+            "Unknown".to_string(),
+            "unknown".to_string(),
+        );
+    }
+    
+    let prefix = parts[0];
+    let name = parts[1..].join("_");
+    
+    let (language_code, gender) = if prefix.len() >= 2 {
+        let lang_part = &prefix[..prefix.len()-1];
+        let gender_part = &prefix[prefix.len()-1..];
+        
+        let gender = match gender_part {
+            "f" => "Female",
+            "m" => "Male", 
+            _ => "Unknown",
+        };
+        
+        (lang_part, gender)
+    } else {
+        (prefix, "Unknown")
+    };
+    
+    let language = match language_code {
+        "a" => "English (US)",
+        "b" => "English (UK)",
+        "e" => "Spanish",
+        "p" => "Portuguese",
+        "f" => "French",
+        "i" => "Italian",
+        "d" => "German",
+        "z" => "Chinese",
+        "j" => "Japanese",
+        "k" => "Korean",
+        "r" => "Russian",
+        "h" => "Hindi",
+        _ => "Unknown",
+    };
+    
+    let display_name = name.chars().next().unwrap_or('a').to_uppercase().to_string() + &name[1..];
+    let description = format!("{} {} voice", language, gender.to_lowercase());
+    
+    (display_name, description, language.to_string(), gender.to_string())
+}
+
+/// Get language code for filtering
+fn get_language_code(language: &str) -> String {
+    match language {
+        "English (US)" => "en".to_string(),
+        "English (UK)" => "en".to_string(),
+        "Spanish" => "es".to_string(),
+        "Portuguese" => "pt".to_string(),
+        "French" => "fr".to_string(),
+        "Italian" => "it".to_string(),
+        "German" => "de".to_string(),
+        "Chinese" => "zh".to_string(),
+        "Japanese" => "ja".to_string(),
+        "Korean" => "ko".to_string(),
+        "Russian" => "ru".to_string(),
+        "Hindi" => "hi".to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
 /// Custom sentence segmentation function that preserves UTF-8 characters
 /// This is a replacement for the sentence_segmentation library to fix the
 /// loss of accented characters during processing and preserve apostrophes.
@@ -669,6 +849,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 
                 // Clean up resources before exit
                 tts.cleanup();
+            }
+
+            Mode::Voices { format, language, gender } => {
+                display_voices(&tts, format, language.as_deref(), gender.as_deref());
+                return Ok(());
             }
 
             Mode::Stream => {

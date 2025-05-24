@@ -339,6 +339,13 @@ impl TTSKoko {
         &self.voices_path
     }
     
+    /// Get a list of all available voice IDs
+    pub fn get_available_voices(&self) -> Vec<String> {
+        let mut voices: Vec<String> = self.styles.keys().cloned().collect();
+        voices.sort();
+        voices
+    }
+    
     pub async fn new(model_path: &str, voices_path: &str) -> Self {
         Self::from_config(model_path, voices_path, InitConfig::default()).await
     }
