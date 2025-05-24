@@ -1,6 +1,6 @@
 [package]
 name = "kokorox"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 homepage = "https://github.com/WismutHansen/kokorox"
 resolver = "2"
