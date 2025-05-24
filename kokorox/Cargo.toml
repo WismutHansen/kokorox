@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2021"
 homepage = "https://github.com/WismutHansen/kokorox"
 resolver = "2"
-authors = ["lucasjinreal", "Tommy Falkowski"]
+authors = ["Lucas Jin", "Tommy Falkowski"]
 description = "Lightning fast text-to-speech with the Kokoro model in rust"
 
 [dependencies]
