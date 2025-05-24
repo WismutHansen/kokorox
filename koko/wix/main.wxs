@@ -62,7 +62,7 @@
         Id='*'
         Name='koko'
         UpgradeCode='336CE5A3-EB28-4A3A-A4C0-477194EBD0F6'
-        Manufacturer='lucasjinreal; Tommy Falkowski'
+        Manufacturer='Lucas Jin; Tommy Falkowski'
         Language='1033'
         Codepage='1252'
         Version='$(var.Version)'>
@@ -70,7 +70,7 @@
         <Package Id='*'
             Keywords='Installer'
             Description='Lightning fast text-to-speech CLI using the Kokoro model in rust'
-            Manufacturer='lucasjinreal; Tommy Falkowski'
+            Manufacturer='Lucas Jin; Tommy Falkowski'
             InstallerVersion='450'
             Languages='1033'
             Compressed='yes'
