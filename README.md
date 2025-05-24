@@ -16,16 +16,13 @@ Languge support:
 - [x] Japanese (partly);
 - [x] German (partly);
 
-> Kokoros Rust version just got a lot attention now. If you also interested in insanely fast inference, embeded build, wasm support etc, please star this repo! We are keep updating it.
-
-New Discord community: <https://discord.gg/E566zfDWqD>, Please join us if you interested in Rust Kokoro.
-
 ## Updates
 
+- **_`2025.05.24`_**: **Added new cli parameter and endpoints audio/voices and audio/voices_detailed** You can list the available voices via the koko CLI.
 - **_`2025.03.23`_**: **Piping now supports incoming streamed text from LLMs** The audio generation will now start once the first complete sentence is detected, making audio playback even faster.
 - **_`2025.03.22`_**: **Piping with direct playback supported.** You can now use `pipe` to use pipes to send text to kokoros, which will be split into sentences and the output will start to play once the first sentence has been generated.
-- **_`2025.01.22`_**: 🔥🔥🔥 **Streaming mode supported.** You can now using `--stream` to have fun with stream mode, kudos to [mroigo](https://github.com/mrorigo);
-- **_`2025.01.17`_**: 🔥🔥🔥 Style mixing supported! Now, listen the output AMSR effect by simply specific style: `af_sky.4+af_nicole.5`;
+- **_`2025.01.22`_**: **Streaming mode supported.** You can now using `--stream` to have fun with stream mode, kudos to [mroigo](https://github.com/mrorigo);
+- **_`2025.01.17`_**: Style mixing supported! Now, listen the output AMSR effect by simply specific style: `af_sky.4+af_nicole.5`;
 - **_`2025.01.15`_**: OpenAI compatible server supported, openai format still under polish!
 - **_`2025.01.15`_**: Phonemizer supported! Now `Kokoros` can inference E2E without anyother dependencies! Kudos to [@tstm](https://github.com/tstm);
 - **_`2025.01.13`_**: Espeak-ng tokenizer and phonemizer supported! Kudos to [@mindreframer](https://github.com/mindreframer) ;
