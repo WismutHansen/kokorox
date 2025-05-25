@@ -42,6 +42,26 @@ Language support includes:
 
 ## Installation
 
+### 0. Install onnx runtime for your architecture
+
+#### Ubuntu
+
+```bash
+# 1) extract (skip if already done)
+tar -xzf onnxruntime-linux-x64-gpu-1.22.0.tgz
+
+# 2) copy *preserving* symlinks & metadata
+sudo cp -a onnxruntime-linux-x64-gpu-1.22.0/include /usr/local/
+sudo cp -a onnxruntime-linux-x64-gpu-1.22.0/lib /usr/local/
+
+# 3) refresh linker cache
+sudo ldconfig
+
+# 4) Make sure the headers are on PATH
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+```
+
 ### 1. Pre-built Binaries (Recommended for most users)
 
 Pre-built binaries for Linux, macOS, and Windows are available on the [**GitHub Releases page**](https://github.com/WismutHansen/kokorox/releases). Download the appropriate archive for your system, extract it, and you'll find the `koko` executable.
