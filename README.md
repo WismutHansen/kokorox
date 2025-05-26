@@ -44,7 +44,7 @@ Language support includes:
 
 ### 0. Install onnx runtime for your architecture
 
-#### Ubuntu
+#### Ubuntu w/ NVIDIA GPU
 
 ```bash
 # 1) extract (skip if already done)

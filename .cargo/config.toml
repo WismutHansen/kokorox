@@ -1,0 +1,7 @@
+[target.'cfg(target_os = "macos")']
+rustflags = [
+  "-C",
+  "link-arg=-Wl,-rpath,@executable_path/../lib", # find libs shipped next to the app
+  "-C",
+  "link-arg=-Wl,-rpath,/opt/homebrew/lib",       # fall back to Homebrew
+]
