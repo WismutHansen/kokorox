@@ -1,6 +1,6 @@
 [package]
 name = "koko"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 repository = "https://github.com/WismutHansen/kokorox.git"
 homepage = "https://github.com/WismutHansen/kokorox"
