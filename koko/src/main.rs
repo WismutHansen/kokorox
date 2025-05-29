@@ -4,8 +4,7 @@ use kokorox::{
     utils::wav::{write_audio_chunk, WavHeader},
 };
 use rodio::{OutputStream, Sink, Source};
-// Removed unused Cow import
-use std::net::{IpAddr, SocketAddr};
+use std::{io, net::{IpAddr, SocketAddr}, path::Path};
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use std::{
@@ -152,7 +151,7 @@ enum Mode {
 #[derive(Parser, Debug)]
 #[command(name = "kokorox")]
 #[command(version = "0.1")]
-#[command(author = "Lucas Jin")]
+#[command(author = "Lucas Jin, Tommy Falkowski")]
 struct Cli {
     /// A language identifier from
     /// https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md
@@ -742,6 +741,14 @@ fn utf8_safe_sentence_segmentation(text: &str, language: &str, verbose: bool, de
         vec![]
     }
 }
+fn ensure_parent_dir_exists(file_path: &str) -> io::Result<()> {
+    if let Some(parent) = Path::new(file_path).parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    Ok(())
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The segmentation fault seems to be related to ONNX runtime cleanup
@@ -940,6 +947,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 // Also create a WAV file to write the output.
+                ensure_parent_dir_exists(output_path)?;
                 let mut wav_file = std::fs::File::create(output_path)?;
                 let header = WavHeader::new(1, tts.sample_rate(), 32);
                 header.write_header(&mut wav_file)?;
