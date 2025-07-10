@@ -119,6 +119,17 @@ enum Mode {
         )]
         output_path: String,
     },
+    /// Start a WebSocket server
+    #[command(name = "websocket", alias = "ws", long_flag_aliases = ["websocket", "ws"])]
+    WebSocket {
+        /// IP address to bind to (typically 127.0.0.1 or 0.0.0.0)
+        #[arg(long, default_value_t = [0, 0, 0, 0].into())]
+        ip: IpAddr,
+
+        /// Port to expose the WebSocket server on
+        #[arg(long, default_value_t = 8766)]
+        port: u16,
+    },
     /// Start an OpenAI-compatible HTTP server
     #[command(name = "openai", alias = "oai", long_flag_aliases = ["oai", "openai"])]
     OpenAI {
@@ -853,8 +864,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let binding = tokio::net::TcpListener::bind(&addr).await?;
                 println!("Starting OpenAI-compatible HTTP server on {addr}");
                 kokorox_openai::serve(binding, app.into_make_service()).await?;
-                
+
                 // Clean up resources before exit
+                tts.cleanup();
+            }
+
+            Mode::WebSocket { ip, port } => {
+                let addr = SocketAddr::from((*ip, *port));
+                println!("Starting WebSocket server on {addr}");
+                kokorox_websocket::start_server(tts.clone(), addr).await?;
+
                 tts.cleanup();
             }
 
