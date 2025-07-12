@@ -10,7 +10,8 @@ use ndarray::Array3;
 use ndarray_npy::NpzReader;
 use std::fs::File;
 
-use espeak_rs::text_to_phonemes;
+use crate::tts::phonemizer::text_to_phonemes_compat as text_to_phonemes;
+use crate::models::get_model_manager;
 
 #[derive(Debug, Clone)]
 pub struct TTSOpts<'a> {
@@ -346,10 +347,67 @@ impl TTSKoko {
         voices
     }
     
+    /// Create a new TTSKoko instance with automatic model downloading
+    /// This method automatically downloads and caches the Kokoro model and voices
+    pub async fn new_auto() -> Result<Self, Box<dyn std::error::Error>> {
+        let model_manager = get_model_manager().await?;
+        let manager = model_manager.lock().await;
+        
+        // Get model paths (will auto-download if needed)
+        let kokoro_path = manager.get_kokoro_path().await?;
+        
+        // For voices, we'll still use the existing download logic for now
+        // TODO: Move voices to model manager as well
+        let voices_path = manager.get_cache_directory().join("voices.npz");
+        
+        drop(manager); // Release the lock before calling from_config
+        
+        let config = InitConfig::default();
+        Self::from_config_with_auto_download(&kokoro_path, &voices_path, config).await
+    }
+    
+    /// Legacy method for backward compatibility
     pub async fn new(model_path: &str, voices_path: &str) -> Self {
         Self::from_config(model_path, voices_path, InitConfig::default()).await
     }
 
+    /// Internal method for auto-download workflow
+    async fn from_config_with_auto_download(
+        model_path: &std::path::Path, 
+        voices_path: &std::path::Path, 
+        cfg: InitConfig
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Model should already be downloaded by model manager
+        if !model_path.exists() {
+            return Err(format!("Model not found at {:?} after auto-download", model_path).into());
+        }
+        
+        // Download voices if not exists (using legacy logic for now)
+        if !voices_path.exists() {
+            if let Some(parent) = voices_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            utils::fileio::download_file_from_url(
+                cfg.voices_url.as_str(), 
+                voices_path.to_str().unwrap()
+            ).await?;
+        }
+        
+        let model = Arc::new(
+            ort_koko::OrtKoko::new(model_path.to_string_lossy().to_string())?
+        );
+        
+        let styles = Self::load_voices(voices_path.to_str().unwrap());
+        
+        Ok(TTSKoko {
+            model_path: model_path.to_string_lossy().to_string(),
+            voices_path: voices_path.to_string_lossy().to_string(),
+            model,
+            styles,
+            init_config: cfg,
+        })
+    }
+    
     pub async fn from_config(model_path: &str, voices_path: &str, cfg: InitConfig) -> Self {
         if !Path::new(model_path).exists() {
             utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
@@ -715,7 +773,7 @@ impl TTSKoko {
             let mut phonemes = text_to_phonemes(&processed_chunk, &language, None, true, false)
                 .map_err(|e| {
                     println!("PHONEMIZE ERROR: {}", e);
-                    Box::new(e) as Box<dyn std::error::Error>
+                    e
                 })?
                 .join("");
                 

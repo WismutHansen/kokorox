@@ -1,9 +1,10 @@
 use crate::tts::normalize;
 use crate::tts::vocab::VOCAB;
-use espeak_rs::text_to_phonemes;
+use crate::tts::phonemizer_backend::{PhonemizerBackend, DeepPhonemizerBackend};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 lazy_static! {
     static ref PHONEME_PATTERNS: Regex = Regex::new(r"(?<=[a-zɹː])(?=hˈʌndɹɪd)").unwrap();
@@ -376,12 +377,17 @@ pub struct Phonemizer {
     lang: String,
     preserve_punctuation: bool,
     with_stress: bool,
+    backend: Arc<dyn PhonemizerBackend>,
 }
 
 impl Phonemizer {
     pub fn new(lang: &str) -> Self {
+        Self::with_backend(lang, Self::create_default_backend())
+    }
+    
+    pub fn with_backend(lang: &str, backend: Arc<dyn PhonemizerBackend>) -> Self {
         // Validate language or default to en-us if invalid
-        let language = if LANGUAGE_MAP.values().any(|&v| v == lang) {
+        let language = if backend.supports_language(lang) {
             println!("Creating phonemizer with language: {}", lang);
             lang.to_string()
         } else {
@@ -396,7 +402,18 @@ impl Phonemizer {
             lang: language,
             preserve_punctuation: true,
             with_stress: true,
+            backend,
         }
+    }
+    
+    fn create_default_backend() -> Arc<dyn PhonemizerBackend> {
+        // Create a DeepPhonemizer backend that will auto-download models
+        Arc::new(DeepPhonemizerBackend::new())
+    }
+    
+    pub async fn new_auto(lang: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let backend = Self::create_default_backend();
+        Ok(Self::with_backend(lang, backend))
     }
 
     /// Get list of all supported languages
@@ -432,23 +449,6 @@ impl Phonemizer {
     }
 
     pub fn phonemize(&self, text: &str, normalize: bool) -> String {
-        // Create a direct phonemization function that uses espeak-ng directly
-        fn direct_phonemize(input: &str, lang: &str, with_stress: bool) -> String {
-            // Call espeak-ng directly
-            match text_to_phonemes(input, lang, None, true, false) {
-                Ok(phonemes) => {
-                    // Join the phonemes into a single string
-                    let joined = phonemes.join("");
-                    println!("DIRECT PHONEMIZE: {} -> {}", input, joined);
-                    joined
-                }
-                Err(e) => {
-                    println!("ERROR in direct phonemize: {}", e);
-                    // Return empty string on error
-                    String::new()
-                }
-            }
-        }
 
         // Fix incomplete phrases by preprocessing the text
         // This addresses issues like "1939 to" directly at the phonemization level
@@ -610,51 +610,52 @@ impl Phonemizer {
             }
         }
 
-        // Use our improved phonemization process
-        // For Spanish text in particular, we need to ensure accents are preserved
-        let phonemes = if self.lang.starts_with("es") {
-            // For Spanish text, try to preserve accents and handle problematic patterns
-            match text_to_phonemes(
-                &text_to_phonemize, // Use our preprocessed text with accents restored
-                &self.lang,
-                None,
-                self.preserve_punctuation,
-                self.with_stress,
-            ) {
-                Ok(phonemes) => {
-                    let joined = phonemes.join("");
-                    println!("SPANISH PHONEMIZATION: {} -> {}", text_to_phonemize, joined);
-
-                    // Apply Spanish-specific fixes to the phonemes
-                    if joined.contains("sjon")
-                        || joined.contains("nasjon")
-                        || joined.contains("politiko")
-                        || joined.contains("ðˌeklaɾ")
-                    {
-                        println!("DEBUG: Fixing Spanish phonemes: {}", joined);
-                        // Use the fix_spanish_phonemes function from koko.rs to correct the phonemes
-                        crate::tts::koko::fix_spanish_phonemes(&joined)
+        // For now, use a blocking approach since the existing API is synchronous
+        // TODO: Convert the entire phonemizer API to async
+        let phonemes = {
+            println!("PHONEMIZATION: Using DeepPhonemizer backend for '{}' in language '{}'", text_to_phonemize, self.lang);
+            
+            // Create a simple runtime for blocking on the future
+            let rt = tokio::runtime::Handle::try_current()
+                .map_err(|_| "No tokio runtime available")
+                .or_else(|_| {
+                    tokio::runtime::Runtime::new()
+                        .map(|rt| rt.handle().clone())
+                        .map_err(|_| "Failed to create tokio runtime")
+                });
+            
+            match rt {
+                Ok(handle) => {
+                    let future = if self.lang.starts_with("es") {
+                        self.backend.phonemize_with_options(
+                            text_to_phonemize.clone(),
+                            self.lang.clone(),
+                            self.preserve_punctuation,
+                            self.with_stress,
+                        )
                     } else {
-                        joined
+                        self.backend.phonemize_with_options(
+                            text_to_phonemize.clone(),
+                            self.lang.clone(),
+                            self.preserve_punctuation,
+                            self.with_stress,
+                        )
+                    };
+                    
+                    match handle.block_on(future) {
+                        Ok(phonemes) => {
+                            println!("PHONEMIZATION SUCCESS: {} -> {}", text_to_phonemize, phonemes);
+                            phonemes
+                        }
+                        Err(e) => {
+                            eprintln!("PHONEMIZATION ERROR: {:?}", e);
+                            // Fallback to empty string for now
+                            String::new()
+                        }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error in Spanish phonemization: {:?}", e);
-                    String::new()
-                }
-            }
-        } else {
-            // For non-Spanish text, use standard phonemization
-            match text_to_phonemes(
-                &text_to_phonemize,
-                &self.lang,
-                None,
-                self.preserve_punctuation,
-                self.with_stress,
-            ) {
-                Ok(phonemes) => phonemes.join(""),
-                Err(e) => {
-                    eprintln!("Error in phonemization: {:?}", e);
+                    eprintln!("RUNTIME ERROR: {}", e);
                     String::new()
                 }
             }
@@ -687,4 +688,21 @@ impl Phonemizer {
 
         ps.trim().to_string()
     }
+}
+
+// Temporary compatibility function for koko.rs
+// This creates a runtime and calls the new async backend
+pub fn text_to_phonemes_compat(
+    text: &str,
+    lang: &str,
+    _voice: Option<&str>,
+    _preserve_punctuation: bool,
+    _with_stress: bool,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    // Since we can't easily handle async from sync context, use the simple fallback directly
+    let result = crate::tts::simple_phonemizer::simple_phonemize(text, lang);
+    
+    // Split the result into individual phonemes (words)
+    let phonemes: Vec<String> = result.split_whitespace().map(|s| s.to_string()).collect();
+    Ok(phonemes)
 }
