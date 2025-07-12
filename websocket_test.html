@@ -339,6 +339,8 @@
                 this.socket = null;
                 this.isConnected = false;
                 this.currentAudio = null;
+                this.audioQueue = [];
+                this.isPlaying = false;
                 
                 this.initializeElements();
                 this.attachEventListeners();
@@ -545,29 +547,66 @@
 
             handleAudioChunk(data) {
                 try {
-                    // Decode base64 audio data
+                    // Decode base64 audio data (now WAV format from server)
                     const audioData = atob(data.chunk);
                     const audioArray = new Uint8Array(audioData.length);
                     for (let i = 0; i < audioData.length; i++) {
                         audioArray[i] = audioData.charCodeAt(i);
                     }
 
-                    // Create audio blob and play
+                    // Create audio blob directly from WAV data
                     const audioBlob = new Blob([audioArray], { type: 'audio/wav' });
                     const audioUrl = URL.createObjectURL(audioBlob);
                     
-                    this.elements.audioPlayer.src = audioUrl;
                     this.log(`Audio chunk received (${data.index + 1}/${data.total})`, 'success');
                     
-                    // Clean up previous audio URL
-                    if (this.currentAudio) {
-                        URL.revokeObjectURL(this.currentAudio);
+                    // Add to queue for sequential playback
+                    this.audioQueue.push({
+                        url: audioUrl,
+                        index: data.index,
+                        total: data.total
+                    });
+                    
+                    // Start playing if not already playing
+                    if (!this.isPlaying) {
+                        this.playNextAudio();
                     }
-                    this.currentAudio = audioUrl;
                     
                 } catch (error) {
                     this.log(`Error processing audio: ${error.message}`, 'error');
                 }
+            }
+
+            playNextAudio() {
+                if (this.audioQueue.length === 0) {
+                    this.isPlaying = false;
+                    return;
+                }
+
+                this.isPlaying = true;
+                const audioItem = this.audioQueue.shift();
+                
+                // Clean up previous audio URL
+                if (this.currentAudio) {
+                    URL.revokeObjectURL(this.currentAudio);
+                }
+                
+                this.elements.audioPlayer.src = audioItem.url;
+                this.currentAudio = audioItem.url;
+                
+                // Set up event listener for when this audio finishes
+                const onEnded = () => {
+                    this.elements.audioPlayer.removeEventListener('ended', onEnded);
+                    this.playNextAudio(); // Play next chunk
+                };
+                
+                this.elements.audioPlayer.addEventListener('ended', onEnded);
+                
+                // Play immediately
+                this.elements.audioPlayer.play().catch(e => {
+                    this.log('Auto-play failed (user interaction required)', 'info');
+                    this.isPlaying = false;
+                });
             }
 
             handleSynthesisCompleted() {
@@ -575,10 +614,7 @@
                 this.elements.synthesizeBtn.disabled = false;
                 this.log('Synthesis completed!', 'success');
                 
-                // Auto-play the audio
-                this.elements.audioPlayer.play().catch(e => {
-                    this.log('Auto-play failed (user interaction required)', 'info');
-                });
+                // No need to auto-play here since streaming chunks handle playback
             }
         }
 
