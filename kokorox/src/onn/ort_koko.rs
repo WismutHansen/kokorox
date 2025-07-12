@@ -12,6 +12,9 @@ use ort_base::OrtBase;
 pub struct OrtKoko {
     sess: Option<Session>,
 }
+
+unsafe impl Send for OrtKoko {}
+unsafe impl Sync for OrtKoko {}
 impl ort_base::OrtBase for OrtKoko {
     fn set_sess(&mut self, sess: Session) {
         self.sess = Some(sess);

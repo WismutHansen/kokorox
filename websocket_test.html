@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kokorox WebSocket TTS Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .status.disconnected {
+            background: #ffe6e6;
+            color: #d63031;
+            border: 2px solid #fab1a0;
+        }
+
+        .status.connected {
+            background: #e6ffe6;
+            color: #00b894;
+            border: 2px solid #81ecec;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeaa7;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        .status.disconnected .status-dot {
+            background: #d63031;
+        }
+
+        .status.connected .status-dot {
+            background: #00b894;
+        }
+
+        .status.connecting .status-dot {
+            background: #856404;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #d0d0d0;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .logs {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 2px solid #333;
+        }
+
+        .logs::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .logs::-webkit-scrollbar-track {
+            background: #2a2a2a;
+            border-radius: 10px;
+        }
+
+        .logs::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 10px;
+        }
+
+        .logs::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+
+        .log-entry.error {
+            color: #ff6b6b;
+        }
+
+        .log-entry.success {
+            color: #51cf66;
+        }
+
+        .log-entry.info {
+            color: #74c0fc;
+        }
+
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .volume-slider {
+            width: 100px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎤 Kokorox TTS</h1>
+            <p>WebSocket Text-to-Speech Test Client</p>
+        </div>
+
+        <div id="status" class="status disconnected">
+            <div class="status-dot"></div>
+            <span>Disconnected</span>
+        </div>
+
+        <div class="form-group">
+            <label for="serverUrl">WebSocket Server URL:</label>
+            <input type="text" id="serverUrl" value="ws://localhost:8080" placeholder="ws://localhost:8080">
+        </div>
+
+        <div class="button-group">
+            <button id="connectBtn" class="btn-primary">Connect</button>
+            <button id="disconnectBtn" class="btn-secondary" disabled>Disconnect</button>
+            <button id="listVoicesBtn" class="btn-secondary" disabled>List Voices</button>
+        </div>
+
+        <div class="form-group">
+            <label for="voiceSelect">Voice:</label>
+            <select id="voiceSelect" disabled>
+                <option value="">Select a voice...</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="textInput">Text to Synthesize:</label>
+            <textarea id="textInput" placeholder="Enter text to convert to speech..." disabled>Hello world! This is a test of the Kokorox text-to-speech system.</textarea>
+        </div>
+
+        <div class="button-group">
+            <button id="synthesizeBtn" class="btn-primary" disabled>🎵 Synthesize Speech</button>
+            <button id="clearLogsBtn" class="btn-secondary">Clear Logs</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Synthesizing speech...</p>
+        </div>
+
+        <div class="audio-controls">
+            <audio id="audioPlayer" controls style="flex: 1;">
+                Your browser does not support the audio element.
+            </audio>
+            <div class="volume-control">
+                <label for="volumeSlider">🔊</label>
+                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.1" value="0.8">
+            </div>
+        </div>
+
+        <div class="logs" id="logs"></div>
+    </div>
+
+    <script>
+        class KokoroxWebSocketClient {
+            constructor() {
+                this.socket = null;
+                this.isConnected = false;
+                this.currentAudio = null;
+                
+                this.initializeElements();
+                this.attachEventListeners();
+                this.updateUI();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    status: document.getElementById('status'),
+                    serverUrl: document.getElementById('serverUrl'),
+                    connectBtn: document.getElementById('connectBtn'),
+                    disconnectBtn: document.getElementById('disconnectBtn'),
+                    listVoicesBtn: document.getElementById('listVoicesBtn'),
+                    voiceSelect: document.getElementById('voiceSelect'),
+                    textInput: document.getElementById('textInput'),
+                    synthesizeBtn: document.getElementById('synthesizeBtn'),
+                    clearLogsBtn: document.getElementById('clearLogsBtn'),
+                    loading: document.getElementById('loading'),
+                    audioPlayer: document.getElementById('audioPlayer'),
+                    volumeSlider: document.getElementById('volumeSlider'),
+                    logs: document.getElementById('logs')
+                };
+            }
+
+            attachEventListeners() {
+                this.elements.connectBtn.addEventListener('click', () => this.connect());
+                this.elements.disconnectBtn.addEventListener('click', () => this.disconnect());
+                this.elements.listVoicesBtn.addEventListener('click', () => this.listVoices());
+                this.elements.synthesizeBtn.addEventListener('click', () => this.synthesize());
+                this.elements.clearLogsBtn.addEventListener('click', () => this.clearLogs());
+                this.elements.voiceSelect.addEventListener('change', () => this.setVoice());
+                this.elements.volumeSlider.addEventListener('input', (e) => {
+                    this.elements.audioPlayer.volume = e.target.value;
+                });
+                
+                // Set initial volume
+                this.elements.audioPlayer.volume = this.elements.volumeSlider.value;
+            }
+
+            log(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${type}`;
+                logEntry.textContent = `[${timestamp}] ${message}`;
+                
+                this.elements.logs.appendChild(logEntry);
+                this.elements.logs.scrollTop = this.elements.logs.scrollHeight;
+            }
+
+            clearLogs() {
+                this.elements.logs.innerHTML = '';
+            }
+
+            updateStatus(status, message) {
+                this.elements.status.className = `status ${status}`;
+                this.elements.status.querySelector('span').textContent = message;
+            }
+
+            updateUI() {
+                this.elements.connectBtn.disabled = this.isConnected;
+                this.elements.disconnectBtn.disabled = !this.isConnected;
+                this.elements.listVoicesBtn.disabled = !this.isConnected;
+                this.elements.voiceSelect.disabled = !this.isConnected;
+                this.elements.textInput.disabled = !this.isConnected;
+                this.elements.synthesizeBtn.disabled = !this.isConnected || !this.elements.voiceSelect.value;
+            }
+
+            connect() {
+                const url = this.elements.serverUrl.value.trim();
+                if (!url) {
+                    this.log('Please enter a server URL', 'error');
+                    return;
+                }
+
+                this.updateStatus('connecting', 'Connecting...');
+                this.log(`Connecting to ${url}...`);
+
+                try {
+                    this.socket = new WebSocket(url);
+                    
+                    this.socket.onopen = () => {
+                        this.isConnected = true;
+                        this.updateStatus('connected', 'Connected');
+                        this.log('Connected successfully!', 'success');
+                        this.updateUI();
+                        this.listVoices(); // Auto-list voices on connect
+                    };
+
+                    this.socket.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (e) {
+                            this.log(`Error parsing message: ${e.message}`, 'error');
+                        }
+                    };
+
+                    this.socket.onclose = () => {
+                        this.isConnected = false;
+                        this.updateStatus('disconnected', 'Disconnected');
+                        this.log('Connection closed', 'error');
+                        this.updateUI();
+                    };
+
+                    this.socket.onerror = (error) => {
+                        this.log(`WebSocket error: ${error}`, 'error');
+                    };
+
+                } catch (error) {
+                    this.log(`Connection failed: ${error.message}`, 'error');
+                    this.updateStatus('disconnected', 'Connection Failed');
+                }
+            }
+
+            disconnect() {
+                if (this.socket) {
+                    this.socket.close();
+                    this.socket = null;
+                }
+            }
+
+            sendMessage(message) {
+                if (this.socket && this.isConnected) {
+                    this.socket.send(JSON.stringify(message));
+                    this.log(`Sent: ${JSON.stringify(message)}`);
+                } else {
+                    this.log('Not connected to server', 'error');
+                }
+            }
+
+            listVoices() {
+                this.sendMessage({ command: 'list_voices' });
+            }
+
+            setVoice() {
+                const voice = this.elements.voiceSelect.value;
+                if (voice) {
+                    this.sendMessage({ command: 'set_voice', voice: voice });
+                }
+                this.updateUI();
+            }
+
+            synthesize() {
+                const text = this.elements.textInput.value.trim();
+                if (!text) {
+                    this.log('Please enter text to synthesize', 'error');
+                    return;
+                }
+
+                this.elements.loading.classList.add('show');
+                this.elements.synthesizeBtn.disabled = true;
+                this.sendMessage({ command: 'synthesize', text: text });
+            }
+
+            handleMessage(data) {
+                this.log(`Received: ${JSON.stringify(data)}`);
+
+                switch (data.type) {
+                    case 'voices':
+                        this.handleVoices(data);
+                        break;
+                    case 'voice_changed':
+                        this.log(`Voice changed to: ${data.voice}`, 'success');
+                        break;
+                    case 'synthesis_started':
+                        this.log('Synthesis started...', 'info');
+                        break;
+                    case 'audio_chunk':
+                        this.handleAudioChunk(data);
+                        break;
+                    case 'synthesis_completed':
+                        this.handleSynthesisCompleted();
+                        break;
+                    case 'error':
+                        this.log('Server error occurred', 'error');
+                        this.elements.loading.classList.remove('show');
+                        this.elements.synthesizeBtn.disabled = false;
+                        break;
+                    default:
+                        this.log(`Unknown message type: ${data.type}`, 'error');
+                }
+            }
+
+            handleVoices(data) {
+                const select = this.elements.voiceSelect;
+                select.innerHTML = '<option value="">Select a voice...</option>';
+                
+                if (data.voices && data.voices.length > 0) {
+                    data.voices.forEach(voice => {
+                        const option = document.createElement('option');
+                        option.value = voice;
+                        option.textContent = voice;
+                        if (voice === data.voice) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                    this.log(`Loaded ${data.voices.length} voices`, 'success');
+                } else {
+                    this.log('No voices available', 'error');
+                }
+                this.updateUI();
+            }
+
+            handleAudioChunk(data) {
+                try {
+                    // Decode base64 audio data
+                    const audioData = atob(data.chunk);
+                    const audioArray = new Uint8Array(audioData.length);
+                    for (let i = 0; i < audioData.length; i++) {
+                        audioArray[i] = audioData.charCodeAt(i);
+                    }
+
+                    // Create audio blob and play
+                    const audioBlob = new Blob([audioArray], { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    this.elements.audioPlayer.src = audioUrl;
+                    this.log(`Audio chunk received (${data.index + 1}/${data.total})`, 'success');
+                    
+                    // Clean up previous audio URL
+                    if (this.currentAudio) {
+                        URL.revokeObjectURL(this.currentAudio);
+                    }
+                    this.currentAudio = audioUrl;
+                    
+                } catch (error) {
+                    this.log(`Error processing audio: ${error.message}`, 'error');
+                }
+            }
+
+            handleSynthesisCompleted() {
+                this.elements.loading.classList.remove('show');
+                this.elements.synthesizeBtn.disabled = false;
+                this.log('Synthesis completed!', 'success');
+                
+                // Auto-play the audio
+                this.elements.audioPlayer.play().catch(e => {
+                    this.log('Auto-play failed (user interaction required)', 'info');
+                });
+            }
+        }
+
+        // Initialize the client when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new KokoroxWebSocketClient();
+        });
+    </script>
+</body>
+</html>

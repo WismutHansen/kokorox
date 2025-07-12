@@ -93,51 +93,57 @@ async fn handle_connection(stream: TcpStream, tts: TTSKoko) {
                                         .unwrap(),
                                     ))
                                     .await;
-                                match tts.tts_raw_audio(
-                                    &text,
-                                    "en-us",
-                                    &current_voice,
-                                    1.0,
-                                    None,
-                                    false,
-                                    true,
-                                ) {
-                                    Ok(audio) => {
-                                        let encoded = encode_audio(&audio);
-                                        let chunk = AudioChunk {
-                                            msg_type: "audio_chunk",
-                                            chunk: &encoded,
-                                            index: 0,
-                                            total: 1,
-                                            sample_rate,
-                                        };
-                                        if let Ok(json) = serde_json::to_string(&chunk) {
-                                            let _ = write.send(Message::Text(json)).await;
+                                let audio_opt = {
+                                    let tts_result = tts.tts_raw_audio(
+                                        &text,
+                                        "en-us",
+                                        &current_voice,
+                                        1.0,
+                                        None,
+                                        false,
+                                        true,
+                                    );
+                                    match tts_result {
+                                        Ok(audio) => Some(audio),
+                                        Err(e) => {
+                                            eprintln!("TTS error: {}", e);
+                                            None
                                         }
-                                        let done = SimpleMsg {
-                                            msg_type: "synthesis_completed",
-                                            voice: None,
-                                            voices: None,
-                                        };
-                                        let _ = write
-                                            .send(Message::Text(
-                                                serde_json::to_string(&done).unwrap(),
-                                            ))
-                                            .await;
                                     }
-                                    Err(e) => {
-                                        let err = SimpleMsg {
-                                            msg_type: "error",
-                                            voice: None,
-                                            voices: None,
-                                        };
-                                        let _ = write
-                                            .send(Message::Text(
-                                                serde_json::to_string(&err).unwrap(),
-                                            ))
-                                            .await;
-                                        eprintln!("TTS error: {}", e);
+                                };
+                                if let Some(audio) = audio_opt {
+                                    let encoded = encode_audio(&audio);
+                                    let chunk = AudioChunk {
+                                        msg_type: "audio_chunk",
+                                        chunk: &encoded,
+                                        index: 0,
+                                        total: 1,
+                                        sample_rate,
+                                    };
+                                    if let Ok(json) = serde_json::to_string(&chunk) {
+                                        let _ = write.send(Message::Text(json)).await;
                                     }
+                                    let done = SimpleMsg {
+                                        msg_type: "synthesis_completed",
+                                        voice: None,
+                                        voices: None,
+                                    };
+                                    let _ = write
+                                        .send(Message::Text(
+                                            serde_json::to_string(&done).unwrap(),
+                                        ))
+                                        .await;
+                                } else {
+                                    let err = SimpleMsg {
+                                        msg_type: "error",
+                                        voice: None,
+                                        voices: None,
+                                    };
+                                    let _ = write
+                                        .send(Message::Text(
+                                            serde_json::to_string(&err).unwrap(),
+                                        ))
+                                        .await;
                                 }
                             }
                         }
