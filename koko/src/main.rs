@@ -636,6 +636,95 @@ fn get_language_code(language: &str) -> String {
     }
 }
 
+/// UTF-8 safe custom sentence segmentation that preserves accented characters
+/// This replaces the problematic sentence_segmentation library
+fn utf8_safe_custom_segmentation(text: &str, language: &str, verbose: bool) -> Vec<String> {
+    if verbose {
+        println!("CUSTOM SEGMENTATION: Input text: {}", text);
+        // Show accented characters in input
+        for (i, c) in text.char_indices() {
+            if !c.is_ascii() {
+                println!("  Input char at {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+            }
+        }
+    }
+    
+    let mut sentences = Vec::new();
+    let mut current_sentence = String::new();
+    let mut chars = text.char_indices().peekable();
+    
+    while let Some((_i, ch)) = chars.next() {
+        current_sentence.push(ch);
+        
+        // Check if this is a sentence ending
+        let is_sentence_ending = if language.starts_with("zh") || language.starts_with("ja") || language.starts_with("ko") {
+            matches!(ch, '。' | '！' | '？' | '.' | '!' | '?')
+        } else {
+            matches!(ch, '.' | '!' | '?')
+        };
+        
+        if is_sentence_ending {
+            // Look ahead to see if this is actually the end of a sentence
+            let mut should_split = true;
+            
+            // Check for common abbreviations that shouldn't split
+            let before_punct = if current_sentence.len() > 1 {
+                &current_sentence[..current_sentence.len()-1]
+            } else {
+                ""
+            };
+            
+            // Common abbreviations that shouldn't cause splits
+            let abbreviations = ["Dr", "Mr", "Mrs", "Ms", "Prof", "etc", "vs", "e.g", "i.e"];
+            for abbrev in &abbreviations {
+                if before_punct.ends_with(abbrev) {
+                    should_split = false;
+                    break;
+                }
+            }
+            
+            // Check if the next character suggests this isn't a sentence boundary
+            if let Some((_, next_ch)) = chars.peek() {
+                if next_ch.is_lowercase() || next_ch.is_ascii_digit() {
+                    should_split = false;
+                }
+            }
+            
+            if should_split {
+                let trimmed = current_sentence.trim().to_string();
+                if !trimmed.is_empty() {
+                    sentences.push(trimmed);
+                    if verbose {
+                        println!("CUSTOM SEGMENTATION: Added sentence: {}", sentences.last().unwrap());
+                        // Show preserved accented characters
+                        for (i, c) in sentences.last().unwrap().char_indices() {
+                            if !c.is_ascii() {
+                                println!("  Preserved char at {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                            }
+                        }
+                    }
+                }
+                current_sentence.clear();
+            }
+        }
+    }
+    
+    // Add any remaining text as the last sentence
+    let remaining = current_sentence.trim().to_string();
+    if !remaining.is_empty() {
+        sentences.push(remaining);
+        if verbose {
+            println!("CUSTOM SEGMENTATION: Added final sentence: {}", sentences.last().unwrap());
+        }
+    }
+    
+    if verbose {
+        println!("CUSTOM SEGMENTATION: Created {} sentences total", sentences.len());
+    }
+    
+    sentences
+}
+
 /// Custom sentence segmentation function that preserves UTF-8 characters
 /// This is a replacement for the sentence_segmentation library to fix the
 /// loss of accented characters during processing and preserve apostrophes.
@@ -681,21 +770,9 @@ fn utf8_safe_sentence_segmentation(text: &str, language: &str, verbose: bool, de
             println!("Preprocessed: {}", preprocessed);
         }
         
-        // Step 2: Choose the appropriate segmentation function based on language
-        let initial_segments = if language.starts_with("es") || 
-                          language.starts_with("fr") || 
-                          language.starts_with("it") || 
-                          language.starts_with("pt") {
-            // Use the English processor for romance languages (for now)
-            // In the future, we could implement language-specific segmentation
-            sentence_segmentation::processor::english(&preprocessed)
-        } else if language.starts_with("de") {
-            // Use the English processor for German (for now)
-            sentence_segmentation::processor::english(&preprocessed)
-        } else {
-            // Default to English processor
-            sentence_segmentation::processor::english(&preprocessed)
-        };
+        // Step 2: Use our own UTF-8 safe segmentation instead of the problematic library
+        // The sentence_segmentation library strips accented characters, so we implement our own
+        let initial_segments = utf8_safe_custom_segmentation(&preprocessed, language, verbose);
         
         // Step 3: Postprocess to fix any remaining issues with incomplete sentences
         let processed = postprocess_sentences(&initial_segments, verbose);
@@ -789,6 +866,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("(To use language-based style selection, use the default style 'af_heart')");
             cli.force_style = true;
         }
+        
+        // Debug: Show current force_style status
+        eprintln!("DEBUG: CLI style='{}', force_style={}", cli.style, cli.force_style);
         
         let Cli {
             lan,
@@ -938,7 +1018,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // Set up audio plumbing once; choose later whether to play it.
                 let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
-                let (maybe_stream, maybe_sink) = if silent {
+                let (_maybe_stream, maybe_sink) = if silent {
                     (None, None)
                 } else {
                     let (stream, handle) = OutputStream::try_default()?;
@@ -1132,7 +1212,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             eprintln!("Using specified language: {}", lan);
                         }
                         
-                        // Handle voice style selection based on force_style flag
+                        language_detected = true;
+                    }
+                    
+                    // Handle voice style selection (always run this when language is first determined)
+                    if language_detected && session_style == style {  // Only change style once
                         if force_style {
                             // When forcing style, just use the user-specified style (from CLI args)
                             eprintln!("Using user-specified voice style: {}", style);
@@ -1141,12 +1225,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // When not forcing, select an appropriate voice for the language
                             let is_custom = tts.is_using_custom_voices(tts.voices_path());
                             let default_style = kokorox::tts::phonemizer::get_default_voice_for_language(&session_language, is_custom);
-                            // Always show the selected voice, this is important information
-                            eprintln!("Selected language-appropriate voice style: {}", default_style);
-                            session_style = default_style;
+                            
+                            // Check if the language-appropriate voice exists in our voices
+                            if tts.get_available_voices().contains(&default_style) {
+                                eprintln!("Selected language-appropriate voice style: {}", default_style);
+                                eprintln!("Will use language: {} with voice: {}", session_language, default_style);
+                                session_style = default_style;
+                            } else {
+                                eprintln!("Language-appropriate voice '{}' not available, using default: {}", default_style, style);
+                                session_style = style.clone();
+                            }
                         }
-                        
-                        language_detected = true;
                         // Always show the final language/voice selection as this is important information
                         eprintln!("Will use language: {} with voice: {}", session_language, session_style);
                     }
@@ -1463,7 +1552,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             speed,
                             initial_silence,
                             false,  // Never auto-detect again
-                            true    // Force the selected style
+                            true    // Always force the session style (which was properly selected above)
                         ) {
                             Ok(audio) => {
                                 // Stream this chunk immediately

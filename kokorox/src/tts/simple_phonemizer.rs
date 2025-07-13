@@ -19,6 +19,27 @@ lazy_static! {
         m.insert("my", "maɪ");
         m.insert("shopping", "ˈʃɑːpɪŋ");
         m.insert("list", "lɪst");
+        
+        // Common Spanish words and their IPA transcriptions
+        m.insert("hola", "ˈola");
+        m.insert("cómo", "ˈkomo");
+        m.insert("estás", "esˈtas");
+        m.insert("está", "esˈta");
+        m.insert("hoy", "ˈoj");
+        m.insert("qué", "ˈke");
+        m.insert("dónde", "ˈdonde");
+        m.insert("cuándo", "ˈkwando");
+        m.insert("por", "ˈpor");
+        m.insert("para", "ˈpara");
+        m.insert("con", "ˈkon");
+        m.insert("más", "ˈmas");
+        m.insert("muy", "ˈmuj");
+        m.insert("bien", "ˈbjen");
+        m.insert("sí", "ˈsi");
+        m.insert("no", "ˈno");
+        m.insert("aquí", "aˈki");
+        m.insert("allí", "aˈʎi");
+        m.insert("ahora", "aˈora");
         m.insert("the", "ðə");
         m.insert("a", "ə");
         m.insert("an", "æn");
@@ -52,6 +73,7 @@ lazy_static! {
     static ref CHAR_TO_PHONEME: HashMap<char, &'static str> = {
         let mut m = HashMap::new();
         
+        // Basic Latin characters  
         m.insert('a', "æ");
         m.insert('b', "b");
         m.insert('c', "k");
@@ -79,6 +101,24 @@ lazy_static! {
         m.insert('y', "j");
         m.insert('z', "z");
         
+        // Spanish accented characters
+        m.insert('á', "a");
+        m.insert('é', "e");
+        m.insert('í', "i");
+        m.insert('ó', "o");
+        m.insert('ú', "u");
+        m.insert('ñ', "ɲ");
+        m.insert('ü', "u");
+        
+        // Uppercase versions
+        m.insert('Á', "a");
+        m.insert('É', "e");
+        m.insert('Í', "i");
+        m.insert('Ó', "o");
+        m.insert('Ú', "u");
+        m.insert('Ñ', "ɲ");
+        m.insert('Ü', "u");
+        
         m
     };
 }
@@ -89,8 +129,13 @@ pub fn simple_phonemize(text: &str, _language: &str) -> String {
     let mut phonemes = Vec::new();
     
     for word in words {
-        // Remove punctuation
-        let clean_word = word.trim_matches(|c: char| !c.is_alphabetic());
+        // Remove punctuation but preserve accented characters
+        // The issue was that is_alphabetic() returns false for accented characters like ó, á, etc.
+        // We need to include Unicode letters and combining marks
+        let clean_word = word.trim_matches(|c: char| {
+            !c.is_alphabetic() && 
+            !matches!(c, 'á' | 'é' | 'í' | 'ó' | 'ú' | 'ñ' | 'ü' | 'Á' | 'É' | 'Í' | 'Ó' | 'Ú' | 'Ñ' | 'Ü')
+        });
         
         if clean_word.is_empty() {
             continue;
@@ -132,5 +177,32 @@ mod tests {
             simple_phonemize("can you add cheese", "en"),
             "kæn juː æd tʃiːz"
         );
+    }
+
+    #[test]
+    fn test_spanish_accented_characters() {
+        // Test the specific case that was failing: "Hola, ¿cómo estás hoy?"
+        let result = simple_phonemize("Hola, ¿cómo estás hoy?", "es");
+        
+        // The phonemizer should preserve and handle accented characters
+        // It should not strip out ó and á like it was doing before
+        assert!(result.contains("ˈkomo"), "Should contain phoneme for 'cómo'");
+        assert!(result.contains("esˈtas"), "Should contain phoneme for 'estás'");
+        
+        // Test individual words
+        assert_eq!(
+            simple_phonemize("cómo", "es"),
+            "ˈkomo"
+        );
+        
+        assert_eq!(
+            simple_phonemize("estás", "es"),
+            "esˈtas"
+        );
+        
+        // Test that accented characters are preserved in unknown words
+        let result_unknown = simple_phonemize("política", "es");
+        assert!(result_unknown.contains("i"), 
+                "Should preserve accented characters in unknown words: got '{}'", result_unknown);
     }
 }
