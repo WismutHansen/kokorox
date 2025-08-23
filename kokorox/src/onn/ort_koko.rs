@@ -73,14 +73,13 @@ impl OrtKoko {
         ];
 
         if let Some(sess_cell) = &self.sess {
-            let sess = sess_cell.borrow_mut();
+            let mut sess = sess_cell.borrow_mut();
             let outputs: SessionOutputs = sess.run(SessionInputs::from(inputs))?;
-            let tensor = outputs["audio"]
+            let (tensor_shape, data) = outputs["audio"]
                 .try_extract_tensor::<f32>()
                 .expect("Failed to extract tensor");
-            let dims: Vec<usize> = tensor.shape().iter().map(|&dim| dim as usize).collect();
-            let (vec, _offset) = tensor.to_owned().into_raw_vec_and_offset();
-            let output = ArrayBase::from_shape_vec(IxDyn(&dims), vec)
+            let dims: Vec<usize> = tensor_shape.iter().map(|&dim| dim as usize).collect();
+            let output = ArrayBase::from_shape_vec(IxDyn(&dims), data.to_vec())
                 .expect("Failed to create array from tensor data");
             Ok(output)
         } else {
