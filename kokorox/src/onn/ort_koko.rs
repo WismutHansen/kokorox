@@ -43,14 +43,13 @@ impl OrtKoko {
         // 1,N 1,256
         // [[0, 56, 51, 142, 156, 69, 63, 3, 16, 61, 4, 16, 156, 51, 4, 16, 62, 77, 156, 51, 86, 5, 0]]
 
-        // Add slightly more padding to prevent first letter truncation
+        // Add proper padding as per original implementation: [0, *tokens, 0]
         let mut tokens = tokens;
         if !tokens.is_empty() && !tokens[0].is_empty() {
-            let mut first_entry = tokens[0].clone();
-            // Increase padding slightly to prevent first letter truncation
-            let initial_silence = vec![0, 0, 0];
-            first_entry.splice(0..1, initial_silence);
-            tokens[0] = first_entry;
+            let mut padded_tokens = vec![0]; // Start with padding token
+            padded_tokens.extend(tokens[0].clone()); // Add original tokens
+            padded_tokens.push(0); // End with padding token
+            tokens[0] = padded_tokens;
         }
 
         let shape = [tokens.len(), tokens[0].len()];

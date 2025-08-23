@@ -244,7 +244,11 @@ impl TTSKoko {
         output_path: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Convert output to standard Vec
-        let audio: Vec<f32> = output.iter().cloned().collect();
+        let mut audio: Vec<f32> = output.iter().cloned().collect();
+        
+        // Trim leading and trailing silence for better audio quality
+        // This is critical for preventing volume fluctuations, especially with whisper voices
+        audio = crate::utils::trim::trim_audio(&audio, 60.0);
 
         let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
         let create_duration = start_t.elapsed().as_secs_f32();
@@ -296,7 +300,11 @@ impl TTSKoko {
         phonemes_len: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Convert output to standard Vec
-        let audio: Vec<f32> = output.iter().cloned().collect();
+        let mut audio: Vec<f32> = output.iter().cloned().collect();
+        
+        // Trim leading and trailing silence for better audio quality
+        // This is critical for preventing volume fluctuations, especially with whisper voices
+        audio = crate::utils::trim::trim_audio(&audio, 60.0);
 
         let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
         let create_duration = start_t.elapsed().as_secs_f32();
@@ -386,7 +394,11 @@ impl TTSKoko {
         writer: &mut W,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Convert output to standard Vec
-        let audio: Vec<f32> = output.iter().cloned().collect();
+        let mut audio: Vec<f32> = output.iter().cloned().collect();
+        
+        // Trim leading and trailing silence for better audio quality
+        // This is critical for preventing volume fluctuations, especially with whisper voices
+        audio = crate::utils::trim::trim_audio(&audio, 60.0);
 
         let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
         let create_duration = start_t.elapsed().as_secs_f32();
@@ -418,7 +430,11 @@ impl TTSKoko {
         phonemes_len: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Convert output to standard Vec
-        let audio: Vec<f32> = output.iter().cloned().collect();
+        let mut audio: Vec<f32> = output.iter().cloned().collect();
+        
+        // Trim leading and trailing silence for better audio quality
+        // This is critical for preventing volume fluctuations, especially with whisper voices
+        audio = crate::utils::trim::trim_audio(&audio, 60.0);
 
         let audio_duration = audio.len() as f32 / TTSKoko::SAMPLE_RATE as f32;
         let create_duration = start_t.elapsed().as_secs_f32();
