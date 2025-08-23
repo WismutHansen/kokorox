@@ -347,7 +347,25 @@ impl TTSKoko {
         voices
     }
     
-    pub async fn new(model_path: &str, voices_path: &str) -> Self {
+    /// Create a new TTSKoko instance with automatic HF cache downloads
+    pub async fn new(model_path: Option<&str>, voices_path: Option<&str>) -> Self {
+        Self::new_with_model_type(model_path, voices_path, None).await
+    }
+
+    /// Create a new TTSKoko instance with specific model type
+    pub async fn new_with_model_type(model_path: Option<&str>, voices_path: Option<&str>, model_type: Option<&str>) -> Self {
+        // Use HF cache logic to ensure files are available
+        let (resolved_model_path, resolved_voices_path) = crate::utils::hf_cache::ensure_files_available(
+            model_path,
+            voices_path, 
+            model_type
+        ).await.expect("Failed to ensure model and voices files are available");
+        
+        Self::from_paths(resolved_model_path.to_string_lossy().as_ref(), resolved_voices_path.to_string_lossy().as_ref()).await
+    }
+
+    /// Create TTSKoko from explicit file paths (legacy method)
+    pub async fn from_paths(model_path: &str, voices_path: &str) -> Self {
         Self::from_config(model_path, voices_path, InitConfig::default()).await
     }
 

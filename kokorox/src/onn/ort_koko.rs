@@ -69,7 +69,7 @@ impl OrtKoko {
         let speed_value: SessionInputValue = SessionInputValue::Owned(Value::from(speed));
 
         let inputs: Vec<(Cow<str>, SessionInputValue)> = vec![
-            (Cow::Borrowed("tokens"), tokens_value),
+            (Cow::Borrowed("input_ids"), tokens_value),
             (Cow::Borrowed("style"), style_value),
             (Cow::Borrowed("speed"), speed_value),
         ];
@@ -77,7 +77,7 @@ impl OrtKoko {
         if let Some(sess) = &self.sess {
             let mut sess = sess.lock();
             let outputs: SessionOutputs = sess.run(SessionInputs::from(inputs))?;
-            let (shape, data) = outputs["audio"]
+            let (shape, data) = outputs[0]
                 .try_extract_tensor::<f32>()
                 .expect("Failed to extract tensor");
             // Convert the shape to a vector of dimensions

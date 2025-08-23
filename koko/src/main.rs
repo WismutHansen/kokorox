@@ -196,23 +196,29 @@ struct Cli {
     )]
     force_style: bool,
 
-    /// Path to the Kokoro v1.0 ONNX model on the filesystem
+    /// Path to the Kokoro v1.0 ONNX model on the filesystem (optional, defaults to HF cache)
     #[arg(
         short = 'm',
         long = "model",
-        value_name = "MODEL_PATH",
-        default_value = "checkpoints/kokoro-v1.0.onnx"
+        value_name = "MODEL_PATH"
     )]
-    model_path: String,
+    model_path: Option<String>,
 
-    /// Path to the voices data file on the filesystem
+    /// Path to the voices data file on the filesystem (optional, defaults to HF cache)
     #[arg(
         short = 'd',
         long = "data",
-        value_name = "DATA_PATH",
-        default_value = "data/voices-v1.0.bin"
+        value_name = "DATA_PATH"
     )]
-    data_path: String,
+    data_path: Option<String>,
+
+    /// Model type to download from Hugging Face (fp16, q4, q4f16, q8f16, quantized, uint8, uint8f16)
+    /// Only used when model path is not specified
+    #[arg(
+        long = "model-type",
+        value_name = "MODEL_TYPE"
+    )]
+    model_type: Option<String>,
 
     /// Silent Mode: If set to true, don't play audio when using Pipe  
     #[arg(
@@ -805,6 +811,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             force_style,
             model_path,
             data_path,
+            model_type,
             style,
             speed,
             initial_silence,
@@ -816,7 +823,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             silent,
         } = cli;
 
-        let tts = TTSKoko::new(&model_path, &data_path).await;
+        let tts = TTSKoko::new_with_model_type(
+            model_path.as_deref(), 
+            data_path.as_deref(),
+            model_type.as_deref()
+        ).await;
 
         match &mode {
             Mode::File {
