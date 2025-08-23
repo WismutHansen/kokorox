@@ -200,12 +200,13 @@ struct Cli {
     )]
     force_style: bool,
 
-    /// Path to the Kokoro v1.0 ONNX model on the filesystem
+    /// Path to the Kokoro v1.0 ONNX model on the filesystem, or model name for auto-download
+    /// If the path doesn't exist, will automatically download to Hugging Face cache directory
     #[arg(
         short = 'm',
         long = "model",
         value_name = "MODEL_PATH",
-        default_value = "checkpoints/kokoro-v1.0.onnx"
+        default_value = "kokoro"
     )]
     model_path: String,
 
@@ -1023,7 +1024,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             silent,
         } = cli;
 
-        let tts = TTSKoko::new(&model_path, &data_path).await;
+        let tts = match TTSKoko::new_with_model_manager(&model_path, &data_path).await {
+            Ok(tts) => tts,
+            Err(e) => {
+                eprintln!("Failed to initialize TTS model: {}", e);
+                eprintln!("Falling back to legacy mode...");
+                TTSKoko::new(&model_path, &data_path).await
+            }
+        };
 
         match &mode {
             Mode::File {

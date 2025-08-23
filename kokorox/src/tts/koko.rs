@@ -363,6 +363,31 @@ impl TTSKoko {
         Self::from_config(model_path, voices_path, InitConfig::default()).await
     }
 
+    /// Create a new TTSKoko instance with automatic model management
+    /// If model_path_or_name doesn't exist as a file, treats it as a model name and uses model manager
+    pub async fn new_with_model_manager(
+        model_path_or_name: &str, 
+        voices_path: &str
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let model_path = if Path::new(model_path_or_name).exists() {
+            // User provided an existing file path - use it directly
+            model_path_or_name.to_string()
+        } else {
+            // Treat as model name and use model manager to get/download model
+            let model_manager = crate::models::get_model_manager().await?;
+            let manager = model_manager.lock().await;
+            let resolved_path = if model_path_or_name == "kokoro" || model_path_or_name == "checkpoints/kokoro-v1.0.onnx" {
+                manager.get_kokoro_path().await?
+            } else {
+                manager.get_model_path(model_path_or_name).await?
+            };
+            resolved_path.to_string_lossy().to_string()
+        };
+
+        // Use the legacy from_config method with resolved path
+        Ok(Self::from_config(&model_path, voices_path, InitConfig::default()).await)
+    }
+
     /// Internal method for auto-download workflow
     async fn from_config_with_auto_download(
         model_path: &std::path::Path,

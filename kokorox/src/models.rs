@@ -58,24 +58,50 @@ impl ModelManager {
         })
     }
 
+    /// Create a new ModelManager with a custom cache directory
+    pub fn with_cache_dir<P: AsRef<Path>>(custom_cache_dir: P) -> Result<Self, Box<dyn Error>> {
+        let cache_dir = custom_cache_dir.as_ref().to_path_buf();
+        fs::create_dir_all(&cache_dir)?;
+
+        let model_registry = Self::load_default_models();
+
+        Ok(Self {
+            cache_dir,
+            model_registry,
+        })
+    }
+
     /// Get the appropriate cache directory for the platform
+    /// Uses Hugging Face cache directory by default
     fn get_cache_dir() -> Result<PathBuf, Box<dyn Error>> {
+        // Check for HF_HOME environment variable first (official HF env var)
+        if let Some(hf_home) = std::env::var_os("HF_HOME") {
+            return Ok(PathBuf::from(hf_home));
+        }
+
+        // Check for HUGGINGFACE_HUB_CACHE environment variable
+        if let Some(hf_cache) = std::env::var_os("HUGGINGFACE_HUB_CACHE") {
+            return Ok(PathBuf::from(hf_cache));
+        }
+
+        // Fall back to standard HF cache directory
         let cache_dir = if let Some(cache_home) = std::env::var_os("XDG_CACHE_HOME") {
-            PathBuf::from(cache_home).join("kokorox")
+            PathBuf::from(cache_home).join("huggingface").join("hub")
         } else if let Some(home) = std::env::var_os("HOME") {
             #[cfg(target_os = "macos")]
             {
                 PathBuf::from(home)
                     .join("Library")
                     .join("Caches")
-                    .join("kokorox")
+                    .join("huggingface")
+                    .join("hub")
             }
             #[cfg(not(target_os = "macos"))]
             {
-                PathBuf::from(home).join(".cache").join("kokorox")
+                PathBuf::from(home).join(".cache").join("huggingface").join("hub")
             }
         } else if let Some(appdata) = std::env::var_os("APPDATA") {
-            PathBuf::from(appdata).join("kokorox").join("cache")
+            PathBuf::from(appdata).join("huggingface").join("hub")
         } else {
             return Err("Could not determine cache directory".into());
         };
