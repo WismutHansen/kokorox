@@ -1,10 +1,11 @@
-#[cfg(feature = "cuda")]
-use ort::execution_providers::cuda::CUDAExecutionProvider;
 #[cfg(feature = "coreml")]
 use ort::execution_providers::coreml::CoreMLExecutionProvider;
 use ort::execution_providers::cpu::CPUExecutionProvider;
+#[cfg(feature = "cuda")]
+use ort::execution_providers::cuda::CUDAExecutionProvider;
 use ort::session::builder::SessionBuilder;
 use ort::session::Session;
+use std::cell::RefCell;
 
 pub trait OrtBase {
     fn load_model(&mut self, model_path: String) -> Result<(), String> {
@@ -14,7 +15,7 @@ pub trait OrtBase {
         #[cfg(feature = "coreml")]
         let providers = [
             CoreMLExecutionProvider::default().build(),
-            CPUExecutionProvider::default().build()
+            CPUExecutionProvider::default().build(),
         ];
 
         #[cfg(all(not(feature = "cuda"), not(feature = "coreml")))]
@@ -35,7 +36,8 @@ pub trait OrtBase {
     }
 
     fn print_info(&self) {
-        if let Some(session) = self.sess() {
+        if let Some(session_cell) = self.sess() {
+            let session = session_cell.borrow();
             eprintln!("Input names:");
             for input in &session.inputs {
                 eprintln!("  - {}", input.name);
@@ -59,5 +61,5 @@ pub trait OrtBase {
     }
 
     fn set_sess(&mut self, sess: Session);
-    fn sess(&self) -> Option<&Session>;
+    fn sess(&self) -> Option<&RefCell<Session>>;
 }

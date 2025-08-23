@@ -1,6 +1,6 @@
 use crate::tts::normalize;
+use crate::tts::phonemizer_backend::{DeepPhonemizerBackend, PhonemizerBackend};
 use crate::tts::vocab::VOCAB;
-use crate::tts::phonemizer_backend::{PhonemizerBackend, DeepPhonemizerBackend};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::HashMap;
@@ -384,7 +384,7 @@ impl Phonemizer {
     pub fn new(lang: &str) -> Self {
         Self::with_backend(lang, Self::create_default_backend())
     }
-    
+
     pub fn with_backend(lang: &str, backend: Arc<dyn PhonemizerBackend>) -> Self {
         // Validate language or default to en-us if invalid
         let language = if backend.supports_language(lang) {
@@ -405,12 +405,12 @@ impl Phonemizer {
             backend,
         }
     }
-    
+
     fn create_default_backend() -> Arc<dyn PhonemizerBackend> {
         // Create a DeepPhonemizer backend that will auto-download models
         Arc::new(DeepPhonemizerBackend::new())
     }
-    
+
     pub async fn new_auto(lang: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let backend = Self::create_default_backend();
         Ok(Self::with_backend(lang, backend))
@@ -449,7 +449,6 @@ impl Phonemizer {
     }
 
     pub fn phonemize(&self, text: &str, normalize: bool) -> String {
-
         // Fix incomplete phrases by preprocessing the text
         // This addresses issues like "1939 to" directly at the phonemization level
         let preprocessed_text = {
@@ -613,8 +612,11 @@ impl Phonemizer {
         // For now, use a blocking approach since the existing API is synchronous
         // TODO: Convert the entire phonemizer API to async
         let phonemes = {
-            println!("PHONEMIZATION: Using DeepPhonemizer backend for '{}' in language '{}'", text_to_phonemize, self.lang);
-            
+            println!(
+                "PHONEMIZATION: Using DeepPhonemizer backend for '{}' in language '{}'",
+                text_to_phonemize, self.lang
+            );
+
             // Create a simple runtime for blocking on the future
             let rt = tokio::runtime::Handle::try_current()
                 .map_err(|_| "No tokio runtime available")
@@ -623,7 +625,7 @@ impl Phonemizer {
                         .map(|rt| rt.handle().clone())
                         .map_err(|_| "Failed to create tokio runtime")
                 });
-            
+
             match rt {
                 Ok(handle) => {
                     let future = if self.lang.starts_with("es") {
@@ -641,10 +643,13 @@ impl Phonemizer {
                             self.with_stress,
                         )
                     };
-                    
+
                     match handle.block_on(future) {
                         Ok(phonemes) => {
-                            println!("PHONEMIZATION SUCCESS: {} -> {}", text_to_phonemize, phonemes);
+                            println!(
+                                "PHONEMIZATION SUCCESS: {} -> {}",
+                                text_to_phonemize, phonemes
+                            );
                             phonemes
                         }
                         Err(e) => {
@@ -701,7 +706,7 @@ pub fn text_to_phonemes_compat(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     // Since we can't easily handle async from sync context, use the simple fallback directly
     let result = crate::tts::simple_phonemizer::simple_phonemize(text, lang);
-    
+
     // Split the result into individual phonemes (words)
     let phonemes: Vec<String> = result.split_whitespace().map(|s| s.to_string()).collect();
     Ok(phonemes)

@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
 
 use ndarray::{ArrayBase, IxDyn, OwnedRepr};
 use ort::{
@@ -10,17 +11,17 @@ use super::ort_base;
 use ort_base::OrtBase;
 
 pub struct OrtKoko {
-    sess: Option<Session>,
+    sess: Option<RefCell<Session>>,
 }
 
 unsafe impl Send for OrtKoko {}
 unsafe impl Sync for OrtKoko {}
 impl ort_base::OrtBase for OrtKoko {
     fn set_sess(&mut self, sess: Session) {
-        self.sess = Some(sess);
+        self.sess = Some(RefCell::new(sess));
     }
 
-    fn sess(&self) -> Option<&Session> {
+    fn sess(&self) -> Option<&RefCell<Session>> {
         self.sess.as_ref()
     }
 }
@@ -71,12 +72,15 @@ impl OrtKoko {
             (Cow::Borrowed("speed"), speed_value),
         ];
 
-        if let Some(sess) = &self.sess {
+        if let Some(sess_cell) = &self.sess {
+            let mut sess = sess_cell.borrow_mut();
             let outputs: SessionOutputs = sess.run(SessionInputs::from(inputs))?;
-            let output = outputs["audio"]
+            let (tensor_shape, data) = outputs["audio"]
                 .try_extract_tensor::<f32>()
-                .expect("Failed to extract tensor")
-                .into_owned();
+                .expect("Failed to extract tensor");
+            let dims: Vec<usize> = tensor_shape.iter().map(|&dim| dim as usize).collect();
+            let output = ArrayBase::from_shape_vec(IxDyn(&dims), data.to_vec())
+                .expect("Failed to create array from tensor data");
             Ok(output)
         } else {
             Err("Session is not initialized.".into())

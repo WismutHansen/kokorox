@@ -4,17 +4,21 @@ use std::future::Future;
 use std::pin::Pin;
 
 #[cfg(feature = "deepphonemizer")]
-use std::path::PathBuf;
-#[cfg(feature = "deepphonemizer")]
 use crate::models::get_model_manager;
+#[cfg(feature = "deepphonemizer")]
+use std::path::PathBuf;
 #[cfg(feature = "deepphonemizer")]
 use std::sync::Arc;
 #[cfg(feature = "deepphonemizer")]
 use tokio::sync::Mutex;
 
 pub trait PhonemizerBackend: Send + Sync {
-    fn phonemize(&self, text: String, language: String) -> Pin<Box<dyn Future<Output = Result<String, Box<dyn Error>>> + Send>>;
-    
+    fn phonemize(
+        &self,
+        text: String,
+        language: String,
+    ) -> Pin<Box<dyn Future<Output = Result<String, Box<dyn Error>>> + Send>>;
+
     fn phonemize_with_options(
         &self,
         text: String,
@@ -22,7 +26,7 @@ pub trait PhonemizerBackend: Send + Sync {
         preserve_punctuation: bool,
         with_stress: bool,
     ) -> Pin<Box<dyn Future<Output = Result<String, Box<dyn Error>>> + Send>>;
-    
+
     fn supports_language(&self, language: &str) -> bool;
 }
 
@@ -59,40 +63,38 @@ impl DeepPhonemizerBackend {
         }
         #[cfg(not(feature = "deepphonemizer"))]
         {
-            Self {
-                _placeholder: (),
-            }
+            Self { _placeholder: () }
         }
     }
-    
+
     #[cfg(feature = "deepphonemizer")]
     #[allow(dead_code)]
     async fn get_or_load_phonemizer(&self, language: &str) -> Result<(), Box<dyn Error>> {
         let phonemizers = self.phonemizers.lock().await;
-        
+
         // Check if already loaded
         if phonemizers.contains_key(language) {
             return Ok(());
         }
-        
+
         // Get model manager and download if needed
         let model_manager = get_model_manager().await?;
         let manager = model_manager.lock().await;
-        
+
         let (model_path, config_path) = manager.get_deepphonemizer_paths(language).await?;
-        
+
         println!("Loading DeepPhonemizer model for language: {}", language);
         println!("Model path: {:?}", model_path);
         println!("Config path: {:?}", config_path);
-        
+
         // For now, we'll create a placeholder since the actual model loading
         // requires the exact model files and config format
         Err(Box::new(ModelNotFoundError {
             message: format!(
-                "DeepPhonemizer model loading not yet implemented. 
+                "DeepPhonemizer model loading not yet implemented.
                 Model files would be downloaded to: {:?}
                 Config file would be at: {:?}
-                
+
                 To complete implementation:
                 1. Verify model file format and loading API
                 2. Implement proper config file generation
@@ -100,7 +102,7 @@ impl DeepPhonemizerBackend {
                 model_path, config_path
             ),
         }) as Box<dyn Error>)
-        
+
         // TODO: Uncomment when ready to implement
         /*
         let device = deepphonemizer::tch::Device::cuda_if_available();
@@ -110,7 +112,7 @@ impl DeepPhonemizerBackend {
             device,
             None,
         )?;
-        
+
         phonemizers.insert(language.to_string(), phonemizer);
         Ok(())
         */
@@ -118,7 +120,11 @@ impl DeepPhonemizerBackend {
 }
 
 impl PhonemizerBackend for DeepPhonemizerBackend {
-    fn phonemize(&self, text: String, language: String) -> Pin<Box<dyn Future<Output = Result<String, Box<dyn Error>>> + Send>> {
+    fn phonemize(
+        &self,
+        text: String,
+        language: String,
+    ) -> Pin<Box<dyn Future<Output = Result<String, Box<dyn Error>>> + Send>> {
         #[cfg(feature = "deepphonemizer")]
         {
             let _phonemizers = self.phonemizers.clone();
@@ -126,39 +132,40 @@ impl PhonemizerBackend for DeepPhonemizerBackend {
                 // Ensure model is loaded (will auto-download if needed)
                 let model_manager = get_model_manager().await?;
                 let manager = model_manager.lock().await;
-                let (_model_path, _config_path) = manager.get_deepphonemizer_paths(&language).await?;
+                let (_model_path, _config_path) =
+                    manager.get_deepphonemizer_paths(&language).await?;
                 drop(manager);
-                
+
                 // Now try to actually load and use the DeepPhonemizer model
                 println!("Attempting to load DeepPhonemizer model...");
                 println!("Model path: {:?}", _model_path);
                 println!("Config path: {:?}", _config_path);
-                
+
                 // For now, we'll return a more informative message since the actual integration
                 // requires testing with the real model files and proper configuration
                 Err(Box::new(ModelNotFoundError {
                     message: format!(
                         "DeepPhonemizer integration ready but requires testing with actual model files.
-                        
+
                         ✅ Model auto-download: IMPLEMENTED
-                        ✅ Config generation: IMPLEMENTED  
+                        ✅ Config generation: IMPLEMENTED
                         ✅ Language selection: IMPLEMENTED
                         📋 Model selected: {}
                         📁 Cache location: {:?}
-                        
+
                         Next steps to complete integration:
                         1. Test with actual model downloads
                         2. Verify config format compatibility
                         3. Implement phoneme post-processing
-                        
+
                         Text: '{}', Language: '{}'",
                         _model_path.file_name().unwrap_or_default().to_string_lossy(),
                         _model_path.parent().unwrap_or(&PathBuf::new()),
-                        text, 
+                        text,
                         language
                     ),
                 }) as Box<dyn Error>)
-                
+
                 // TODO: Uncomment when ready for production testing
                 /*
                 // Try to load the model using the DeepPhonemizer API
@@ -169,16 +176,16 @@ impl PhonemizerBackend for DeepPhonemizerBackend {
                     device,
                     None,
                 )?;
-                
+
                 // Cache the loaded model
                 let mut phonemizers = phonemizers.lock().await;
                 phonemizers.insert(language.clone(), phonemizer);
                 drop(phonemizers);
-                
+
                 // Now perform phonemization
                 let phonemizers = phonemizers.lock().await;
                 let phonemizer = phonemizers.get(&language).unwrap();
-                
+
                 let result = phonemizer.phonemize(
                     text,
                     language,
@@ -186,7 +193,7 @@ impl PhonemizerBackend for DeepPhonemizerBackend {
                     true,  // expand_acronyms
                     1,  // batch_size
                 )?;
-                
+
                 // Extract phonemes from result
                 Ok(result.phonemes.join(""))
                 */
@@ -203,7 +210,7 @@ impl PhonemizerBackend for DeepPhonemizerBackend {
             })
         }
     }
-    
+
     fn phonemize_with_options(
         &self,
         text: String,
@@ -214,15 +221,39 @@ impl PhonemizerBackend for DeepPhonemizerBackend {
         // Delegate to main phonemize method for now
         self.phonemize(text, language)
     }
-    
+
     fn supports_language(&self, language: &str) -> bool {
         // DeepPhonemizer supports languages based on available checkpoints
         // For now, we'll assume common languages are supported
         matches!(
             language,
-            "en" | "en_us" | "en_gb" | "de" | "fr" | "es" | "it" | "pt" | "nl" | 
-            "ru" | "pl" | "cs" | "sv" | "da" | "no" | "fi" | "hu" | "el" | "tr" |
-            "ar" | "fa" | "he" | "hi" | "ja" | "ko" | "zh" | "vi" | "th"
+            "en" | "en_us"
+                | "en_gb"
+                | "de"
+                | "fr"
+                | "es"
+                | "it"
+                | "pt"
+                | "nl"
+                | "ru"
+                | "pl"
+                | "cs"
+                | "sv"
+                | "da"
+                | "no"
+                | "fi"
+                | "hu"
+                | "el"
+                | "tr"
+                | "ar"
+                | "fa"
+                | "he"
+                | "hi"
+                | "ja"
+                | "ko"
+                | "zh"
+                | "vi"
+                | "th"
         )
     }
 }

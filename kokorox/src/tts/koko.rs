@@ -10,20 +10,21 @@ use ndarray::Array3;
 use ndarray_npy::NpzReader;
 use std::fs::File;
 
-use crate::tts::phonemizer::text_to_phonemes_compat as text_to_phonemes;
 use crate::models::get_model_manager;
+use crate::tts::phonemizer::text_to_phonemes_compat as text_to_phonemes;
 
 #[derive(Debug, Clone)]
 pub struct TTSOpts<'a> {
     pub txt: &'a str,
     pub lan: &'a str,
     pub auto_detect_language: bool,
-    pub force_style: bool,  // Whether to override auto style selection
+    pub force_style: bool, // Whether to override auto style selection
     pub style_name: &'a str,
     pub save_path: &'a str,
     pub mono: bool,
     pub speed: f32,
     pub initial_silence: Option<usize>,
+    pub phonemes: bool, // Whether input is already phonemes
 }
 
 #[derive(Clone)]
@@ -56,10 +57,10 @@ impl Default for InitConfig {
 // Function to restore accents in Spanish text
 pub fn restore_spanish_accents(text: &str) -> String {
     let mut fixed = text.to_string();
-    
+
     // Common Spanish words with accents that might be lost
     let replacements = [
-        // Spanish verbs with missing accents on the final "o" 
+        // Spanish verbs with missing accents on the final "o"
         // Very common issue in the past tense (preterite)
         ("dur", "duró"),
         ("Dur", "Duró"),
@@ -77,13 +78,11 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("dej", "dejó"),
         ("explic", "explicó"),
         ("pens", "pensó"),
-        
         // Common politica/política variants
         ("politica", "política"),
         ("poltica", "política"),
         ("Politica", "Política"),
         ("Poltica", "Política"),
-        
         // Words ending in -ía that are frequently missing the accent
         ("economia", "economía"),
         ("Economia", "Economía"),
@@ -102,13 +101,11 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("melodia", "melodía"),
         ("autonomia", "autonomía"),
         ("ideologia", "ideología"),
-        
         // Words with accent on í
         ("aqu", "aquí"),
         ("Aqu", "Aquí"),
         ("pais", "país"),
         ("calificacion", "calificación"),
-        
         // Words with accent on é
         ("epoca", "época"),
         ("telefono", "teléfono"),
@@ -121,7 +118,6 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("electrica", "eléctrica"),
         ("electronico", "electrónico"),
         ("electronica", "electrónica"),
-        
         // Words with accent on á
         ("practico", "práctico"),
         ("practica", "práctica"),
@@ -130,7 +126,6 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("matematica", "matemática"),
         ("matematicas", "matemáticas"),
         ("trafico", "tráfico"),
-        
         // Words with accent on ó
         ("perodo", "período"),
         ("periodico", "periódico"),
@@ -142,21 +137,18 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("historica", "histórica"),
         ("ultimos", "últimos"),
         ("ultimo", "último"),
-        
         // Common pronouns and short words with accents
         ("el.", "él."),
         ("el,", "él,"),
         ("el?", "él?"),
         ("el!", "él!"),
         (" el ", " él "),
-        
         ("mas ", "más "),
         ("esta ", "está "),
         ("este ", "esté "),
         ("si ", "sí "),
         ("tu ", "tú "),
         ("mi ", "mí "),
-        
         // Words ending in -ión (extremely common in Spanish)
         ("innovacion", "innovación"),
         ("informacion", "información"),
@@ -189,7 +181,6 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("rebelion", "rebelión"),
         ("creacion", "creación"),
         ("creacin", "creación"),
-        
         // Words with ñ
         ("companía", "compañía"),
         ("compani", "compañí"),
@@ -206,7 +197,6 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("sueno", "sueño"),
         ("pequeno", "pequeño"),
         ("pequena", "pequeña"),
-        
         // Words with ü
         ("linguistica", "lingüística"),
         ("bilinguismo", "bilingüismo"),
@@ -215,27 +205,30 @@ pub fn restore_spanish_accents(text: &str) -> String {
         ("antiguedad", "antigüedad"),
         ("bilingue", "bilingüe"),
     ];
-    
+
     // First log the text for debugging
     println!("ACCENT RESTORATION: Processing text: {}", fixed);
-    
+
     // First, apply specific word replacements
     for (wrong, correct) in replacements.iter() {
         if fixed.contains(wrong) {
             // Only replace if this is a whole word match (to avoid partial matches)
             // e.g., replace "dur" with "duró" only when it's the whole word, not part of "durante"
-            
+
             // For words with spaces, we can't use the word boundary technique, so apply directly
             if wrong.contains(" ") {
                 fixed = fixed.replace(wrong, correct);
                 continue;
             }
-            
+
             // For single words, try to use word boundaries for more precise replacement
             let word_pattern = format!(r"\b{}\b", regex::escape(wrong));
             if let Ok(re) = regex::Regex::new(&word_pattern) {
                 if re.is_match(&fixed) {
-                    println!("ACCENT FIX: Found '{}', replacing with '{}'", wrong, correct);
+                    println!(
+                        "ACCENT FIX: Found '{}', replacing with '{}'",
+                        wrong, correct
+                    );
                     fixed = re.replace_all(&fixed, *correct).to_string();
                 }
             } else {
@@ -244,34 +237,36 @@ pub fn restore_spanish_accents(text: &str) -> String {
             }
         }
     }
-    
+
     // Apply more aggressive Spanish verb accent restoration for past tense verbs
     // This covers very common cases like "dur" -> "duró"
     let past_tense_verbs_re = regex::Regex::new(r"\b([a-z]+)(r)\b").unwrap_or_else(|_| {
         println!("WARNING: Failed to create past tense verb regex");
         regex::Regex::new(r"unmatchable").unwrap()
     });
-    
+
     if past_tense_verbs_re.is_match(&fixed) {
         println!("VERB CHECK: Found potential past tense verb(s) missing accents");
-        fixed = past_tense_verbs_re.replace_all(&fixed, |caps: &regex::Captures| {
-            // Only apply to short verbs (3-5 characters) to avoid false positives
-            let stem = &caps[1];
-            if stem.len() >= 2 && stem.len() <= 4 {
-                // Common past tense verb pattern in Spanish
-                format!("{}ó", stem)
-            } else {
-                // Return unchanged if not a likely candidate
-                caps[0].to_string()
-            }
-        }).to_string();
+        fixed = past_tense_verbs_re
+            .replace_all(&fixed, |caps: &regex::Captures| {
+                // Only apply to short verbs (3-5 characters) to avoid false positives
+                let stem = &caps[1];
+                if stem.len() >= 2 && stem.len() <= 4 {
+                    // Common past tense verb pattern in Spanish
+                    format!("{}ó", stem)
+                } else {
+                    // Return unchanged if not a likely candidate
+                    caps[0].to_string()
+                }
+            })
+            .to_string();
     }
-    
+
     // Give a summary of changes
     if fixed != text {
         println!("ACCENT RESTORATION: Fixed text: {}", fixed);
     }
-    
+
     fixed
 }
 
@@ -279,55 +274,52 @@ pub fn restore_spanish_accents(text: &str) -> String {
 pub fn fix_spanish_phonemes(phonemes: &str) -> String {
     println!("DEBUG: Fixing Spanish phonemes: {}", phonemes);
     let mut fixed = phonemes.to_string();
-    
+
     // Fix for words ending in "ción" (often mispronounced)
     // The correct phonemes should emphasize the "ón" sound and place stress on it
     if fixed.contains("sjon") {
         fixed = fixed.replace("sjon", "sjˈon");
     }
-    
+
     // Fix for words ending in "ciones" (plural form)
     if fixed.contains("sjones") {
         fixed = fixed.replace("sjones", "sjˈones");
     }
-    
+
     // Fix for "político" and similar words with accented i
     if fixed.contains("politiko") {
         fixed = fixed.replace("politiko", "polˈitiko");
     }
-    
+
     // Common Spanish word corrections
     let corrections = [
         // Add stress markers for common words
-        ("nasjon", "nasjˈon"),         // nación
-        ("edukasjon", "edukasjˈon"),   // educación
+        ("nasjon", "nasjˈon"),             // nación
+        ("edukasjon", "edukasjˈon"),       // educación
         ("komunikasjon", "komunikasjˈon"), // comunicación
         ("oɾɣanisasjon", "oɾɣanisasjˈon"), // organización
-        ("kondisjon", "kondisjˈon"),   // condición
-        
-        // Spanish stress patterns on penultimate syllable for words 
+        ("kondisjon", "kondisjˈon"),       // condición
+        // Spanish stress patterns on penultimate syllable for words
         // ending in 'n', 's', or vowel (without written accent)
-        ("tɾabaxa", "tɾabˈaxa"),      // trabaja
-        ("komida", "komˈida"),        // comida
-        ("espeɾansa", "espeɾˈansa"),  // esperanza
-        
+        ("tɾabaxa", "tɾabˈaxa"),     // trabaja
+        ("komida", "komˈida"),       // comida
+        ("espeɾansa", "espeɾˈansa"), // esperanza
         // Words with stress on final syllable (ending in consonants other than n, s)
-        ("papeɫ", "papˈeɫ"),         // papel
-        ("maðɾið", "maðɾˈið"),       // Madrid
-        
+        ("papeɫ", "papˈeɫ"),   // papel
+        ("maðɾið", "maðɾˈið"), // Madrid
         // Words with explicit accents
-        ("politika", "polˈitika"),    // política
-        ("ekonomia", "ekonomˈia"),    // economía
+        ("politika", "polˈitika"), // política
+        ("ekonomia", "ekonomˈia"), // economía
     ];
-    
+
     for (pattern, replacement) in corrections.iter() {
         if fixed.contains(pattern) {
             fixed = fixed.replace(pattern, replacement);
         }
     }
-    
+
     // Add more fixes here based on observations
-    
+
     fixed
 }
 
@@ -335,37 +327,37 @@ impl TTSKoko {
     pub fn sample_rate(&self) -> u32 {
         self.init_config.sample_rate
     }
-    
+
     pub fn voices_path(&self) -> &str {
         &self.voices_path
     }
-    
+
     /// Get a list of all available voice IDs
     pub fn get_available_voices(&self) -> Vec<String> {
         let mut voices: Vec<String> = self.styles.keys().cloned().collect();
         voices.sort();
         voices
     }
-    
+
     /// Create a new TTSKoko instance with automatic model downloading
     /// This method automatically downloads and caches the Kokoro model and voices
     pub async fn new_auto() -> Result<Self, Box<dyn std::error::Error>> {
         let model_manager = get_model_manager().await?;
         let manager = model_manager.lock().await;
-        
+
         // Get model paths (will auto-download if needed)
         let kokoro_path = manager.get_kokoro_path().await?;
-        
+
         // For voices, we'll still use the existing download logic for now
         // TODO: Move voices to model manager as well
         let voices_path = manager.get_cache_directory().join("voices.npz");
-        
+
         drop(manager); // Release the lock before calling from_config
-        
+
         let config = InitConfig::default();
         Self::from_config_with_auto_download(&kokoro_path, &voices_path, config).await
     }
-    
+
     /// Legacy method for backward compatibility
     pub async fn new(model_path: &str, voices_path: &str) -> Self {
         Self::from_config(model_path, voices_path, InitConfig::default()).await
@@ -373,32 +365,33 @@ impl TTSKoko {
 
     /// Internal method for auto-download workflow
     async fn from_config_with_auto_download(
-        model_path: &std::path::Path, 
-        voices_path: &std::path::Path, 
-        cfg: InitConfig
+        model_path: &std::path::Path,
+        voices_path: &std::path::Path,
+        cfg: InitConfig,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // Model should already be downloaded by model manager
         if !model_path.exists() {
             return Err(format!("Model not found at {:?} after auto-download", model_path).into());
         }
-        
+
         // Download voices if not exists (using legacy logic for now)
         if !voices_path.exists() {
             if let Some(parent) = voices_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
             utils::fileio::download_file_from_url(
-                cfg.voices_url.as_str(), 
-                voices_path.to_str().unwrap()
-            ).await?;
+                cfg.voices_url.as_str(),
+                voices_path.to_str().unwrap(),
+            )
+            .await?;
         }
-        
-        let model = Arc::new(
-            ort_koko::OrtKoko::new(model_path.to_string_lossy().to_string())?
-        );
-        
+
+        let model = Arc::new(ort_koko::OrtKoko::new(
+            model_path.to_string_lossy().to_string(),
+        )?);
+
         let styles = Self::load_voices(voices_path.to_str().unwrap());
-        
+
         Ok(TTSKoko {
             model_path: model_path.to_string_lossy().to_string(),
             voices_path: voices_path.to_string_lossy().to_string(),
@@ -407,7 +400,7 @@ impl TTSKoko {
             init_config: cfg,
         })
     }
-    
+
     pub async fn from_config(model_path: &str, voices_path: &str, cfg: InitConfig) -> Self {
         if !Path::new(model_path).exists() {
             utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
@@ -439,7 +432,7 @@ impl TTSKoko {
             init_config: cfg,
         }
     }
-    
+
     // Check if the voices file is a custom voices file
     pub fn is_using_custom_voices(&self, data_path: &str) -> bool {
         // Check if the file path contains "custom"
@@ -447,25 +440,25 @@ impl TTSKoko {
             println!("Using custom voices file: {}", data_path);
             return true;
         }
-        
+
         // Also check for specific known custom voice styles in the loaded styles
-        let has_custom_styles = self.styles.keys().any(|k| 
-            k.starts_with("en_") || 
-            k.starts_with("zh_") || 
-            k.starts_with("ja_") ||
-            k.starts_with("fr_") ||
-            k.starts_with("de_") || 
-            k.starts_with("es_") || 
-            k.starts_with("pt_") || 
-            k.starts_with("ru_") || 
-            k.starts_with("ko_")
-        );
-        
+        let has_custom_styles = self.styles.keys().any(|k| {
+            k.starts_with("en_")
+                || k.starts_with("zh_")
+                || k.starts_with("ja_")
+                || k.starts_with("fr_")
+                || k.starts_with("de_")
+                || k.starts_with("es_")
+                || k.starts_with("pt_")
+                || k.starts_with("ru_")
+                || k.starts_with("ko_")
+        });
+
         if has_custom_styles {
             println!("Custom voice styles detected in: {}", data_path);
             return true;
         }
-        
+
         println!("Using standard voices file: {}", data_path);
         false
     }
@@ -484,10 +477,10 @@ impl TTSKoko {
         // Note: We don't use auto-detection in this function anymore
         // The language to use will be properly determined in tts_raw_audio
         // and phonemization will happen with the correct language there
-        
+
         // For now we use detect_language as fallback for sentence chunking only
         let lang = detect_language(text).unwrap_or_else(|| "en-us".to_string());
-        
+
         for sentence in sentences {
             // Clean up the sentence and add back punctuation
             let sentence = format!("{}.", sentence.trim());
@@ -556,6 +549,85 @@ impl TTSKoko {
         chunks
     }
 
+    pub fn tts_phonemes_to_audio(
+        &self,
+        phonemes: &str,
+        style_name: &str,
+        speed: f32,
+        initial_silence: Option<usize>,
+        force_style: bool,
+    ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+        let mut final_audio = Vec::new();
+
+        // Determine which style to use
+        let effective_style = if !force_style {
+            // For phonemes mode, we can't auto-detect language from text,
+            // so we need to use a reasonable default or the provided style
+            if self.styles.contains_key(style_name) {
+                style_name.to_string()
+            } else {
+                // Fall back to first available voice
+                let fallback_style = self.styles.keys().next().unwrap().to_string();
+                println!(
+                    "Phonemes mode: Style '{}' not found, falling back to: {}",
+                    style_name, fallback_style
+                );
+                fallback_style
+            }
+        } else {
+            // User has explicitly forced a specific style
+            if self.styles.contains_key(style_name) {
+                style_name.to_string()
+            } else {
+                let fallback_style = self.styles.keys().next().unwrap().to_string();
+                println!(
+                    "Phonemes mode: Forced style '{}' not found, falling back to: {}",
+                    style_name, fallback_style
+                );
+                fallback_style
+            }
+        };
+
+        println!("Processing phonemes directly: {}", phonemes);
+
+        // Tokenize the phonemes
+        let mut tokens = tokenize(phonemes);
+
+        // Add initial silence if requested
+        for _ in 0..initial_silence.unwrap_or(0) {
+            tokens.insert(0, 30);
+        }
+
+        // Get style vectors
+        let styles = self.mix_styles(&effective_style, tokens.len())?;
+
+        // Pad tokens
+        let mut padded_tokens = vec![0];
+        for &token in &tokens {
+            padded_tokens.push(token);
+        }
+        padded_tokens.push(0);
+
+        let tokens = vec![padded_tokens];
+
+        // Generate audio
+        match self.model.infer(tokens, styles.clone(), speed) {
+            Ok(chunk_audio) => {
+                let chunk_audio: Vec<f32> = chunk_audio.iter().cloned().collect();
+                final_audio.extend_from_slice(&chunk_audio);
+            }
+            Err(e) => {
+                eprintln!("Error processing phonemes: {:?}", e);
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Phonemes processing failed: {:?}", e),
+                )));
+            }
+        }
+
+        Ok(final_audio)
+    }
+
     pub fn tts_raw_audio(
         &self,
         txt: &str,
@@ -578,7 +650,10 @@ impl TTSKoko {
                 println!("Detected language: {} (confidence is good)", detected);
                 detected
             } else {
-                println!("Language detection failed, falling back to specified language: {}", lan);
+                println!(
+                    "Language detection failed, falling back to specified language: {}",
+                    lan
+                );
                 lan.to_string()
             }
         } else {
@@ -590,32 +665,50 @@ impl TTSKoko {
 
         // Determine if we're using custom voices
         let is_custom = self.is_using_custom_voices(&self.voices_path);
-        
+
         // Determine which style to use
         let effective_style = if !force_style {
             // Try to automatically select a voice appropriate for the language
             // This applies to both auto-detect and manual language selection modes
             let default_style = get_default_voice_for_language(&language, is_custom);
-            
+
             // Check if the default style exists in our voices
             if self.styles.contains_key(&default_style) {
                 if auto_detect_language {
-                    println!("Detected language: {} - Using voice style: {}", language, default_style);
+                    println!(
+                        "Detected language: {} - Using voice style: {}",
+                        language, default_style
+                    );
                 } else {
-                    println!("Manual language: {} - Using appropriate voice style: {}", language, default_style);
+                    println!(
+                        "Manual language: {} - Using appropriate voice style: {}",
+                        language, default_style
+                    );
                 }
                 default_style
             } else {
                 // Fall back to user-provided style if default not available
                 if auto_detect_language {
-                    println!("Detected language: {} - Default voice unavailable, using: {}", language, style_name);
+                    println!(
+                        "Detected language: {} - Default voice unavailable, using: {}",
+                        language, style_name
+                    );
                 } else {
-                    println!("Manual language: {} - No specific voice available, using: {}", language, style_name);
+                    println!(
+                        "Manual language: {} - No specific voice available, using: {}",
+                        language, style_name
+                    );
                 }
                 // Check if the user's style is available
                 if !self.styles.contains_key(style_name) {
-                    println!("WARNING: Specified style '{}' not found in available voices", style_name);
-                    println!("Available voices: {:?}", self.styles.keys().collect::<Vec<_>>());
+                    println!(
+                        "WARNING: Specified style '{}' not found in available voices",
+                        style_name
+                    );
+                    println!(
+                        "Available voices: {:?}",
+                        self.styles.keys().collect::<Vec<_>>()
+                    );
                     // Fall back to a default voice we know exists - first voice in the list
                     let fallback_style = self.styles.keys().next().unwrap().to_string();
                     println!("Falling back to first available voice: {}", fallback_style);
@@ -627,15 +720,27 @@ impl TTSKoko {
         } else {
             // User has explicitly forced a specific style
             if auto_detect_language {
-                println!("Detected language: {} - User override: using voice style: {}", language, style_name);
+                println!(
+                    "Detected language: {} - User override: using voice style: {}",
+                    language, style_name
+                );
             } else {
-                println!("Manual language mode: {} - User force-style: {}", language, style_name);
+                println!(
+                    "Manual language mode: {} - User force-style: {}",
+                    language, style_name
+                );
             }
-            
+
             // Check if the forced style exists
             if !self.styles.contains_key(style_name) {
-                println!("WARNING: Forced style '{}' not found in available voices", style_name);
-                println!("Available voices: {:?}", self.styles.keys().collect::<Vec<_>>());
+                println!(
+                    "WARNING: Forced style '{}' not found in available voices",
+                    style_name
+                );
+                println!(
+                    "Available voices: {:?}",
+                    self.styles.keys().collect::<Vec<_>>()
+                );
                 // Provide a fallback that we know exists - first voice in the list
                 let fallback_style = self.styles.keys().next().unwrap().to_string();
                 println!("Falling back to first available voice: {}", fallback_style);
@@ -648,38 +753,40 @@ impl TTSKoko {
         for chunk in chunks {
             // Convert chunk to phonemes using the determined language
             println!("Processing chunk with language: {}", language);
-            
+
             // Process the chunk to handle numbers and accents appropriately
             let processed_chunk = {
                 // First, process numbers in the appropriate language
                 // Explicitly pre-normalize the text for numbers before phonemization
                 let mut processed = chunk.to_string();
-                
+
                 // Handle digits, numerals, etc.
                 if chunk.chars().any(|c| c.is_ascii_digit()) {
                     // Apply number expansion functions from normalize.rs
                     // We need to do some targeted number extraction and expansion
-                    
+
                     // First, extract standalone number sequences
                     let numbers_re = regex::Regex::new(r"\b\d+\b").unwrap();
                     for number_match in numbers_re.find_iter(&chunk) {
                         let number_str = number_match.as_str();
-                        let number_expansion = crate::tts::normalize::expand_number_for_tts(number_str, &language);
-                        
+                        let number_expansion =
+                            crate::tts::normalize::expand_number_for_tts(number_str, &language);
+
                         // Replace directly in our processed string
                         processed = processed.replace(number_str, &number_expansion);
                     }
-                    
+
                     // Handle decimals
                     let decimal_re = regex::Regex::new(r"\d*\.\d+").unwrap();
                     for decimal_match in decimal_re.find_iter(&chunk) {
                         let decimal_str = decimal_match.as_str();
-                        let decimal_expansion = crate::tts::normalize::expand_decimal_for_tts(decimal_str, &language);
-                        
+                        let decimal_expansion =
+                            crate::tts::normalize::expand_decimal_for_tts(decimal_str, &language);
+
                         // Replace directly in our processed string
                         processed = processed.replace(decimal_str, &decimal_expansion);
                     }
-                    
+
                     // Convert "2023" to "two thousand twenty-three", etc.
                     // We need to be careful about years that might be followed by words like "to"
                     // First, check for years followed directly by "to" (without space)
@@ -690,18 +797,22 @@ impl TTSKoko {
                             let connected_str = connected_match.as_str();
                             // Split this into year and "to" to prevent it from being processed as one token
                             if let Some(year_str) = connected_str.strip_suffix("to") {
-                                let year_expansion = crate::tts::normalize::expand_number_for_tts(year_str, &language);
+                                let year_expansion = crate::tts::normalize::expand_number_for_tts(
+                                    year_str, &language,
+                                );
                                 // Replace with proper spacing
                                 let replacement = format!("{} to", year_expansion);
                                 processed = processed.replace(connected_str, &replacement);
-                                println!("YEAR PATTERN: Fixed connected year-to pattern: '{}' -> '{}'", 
-                                         connected_str, replacement);
+                                println!(
+                                    "YEAR PATTERN: Fixed connected year-to pattern: '{}' -> '{}'",
+                                    connected_str, replacement
+                                );
                             }
                         }
                     } else {
                         println!("WARNING: Error creating regex for year_pattern");
                     }
-                    
+
                     // Additionally, check for specific problematic patterns that commonly appear
                     // Even with all our fixes, they might still show up
                     for year in ["1939", "1940", "1941", "1942", "1945"] {
@@ -711,33 +822,41 @@ impl TTSKoko {
                             // Replace with lowercase to prevent issues in TTS processing
                             let fixed_pattern = format!("{} to it", year);
                             processed = processed.replace(&error_pattern, &fixed_pattern);
-                            println!("YEAR PATTERN: Fixed capitalization issue: '{}' -> '{}'", 
-                                     error_pattern, fixed_pattern);
+                            println!(
+                                "YEAR PATTERN: Fixed capitalization issue: '{}' -> '{}'",
+                                error_pattern, fixed_pattern
+                            );
                         }
                     }
-                    
+
                     // Now handle normal years
                     let year_re = regex::Regex::new(r"\b(19|20)\d{2}\b").unwrap();
                     for year_match in year_re.find_iter(&chunk) {
                         let year_str = year_match.as_str();
-                        let year_expansion = crate::tts::normalize::expand_number_for_tts(year_str, &language);
-                        
+                        let year_expansion =
+                            crate::tts::normalize::expand_number_for_tts(year_str, &language);
+
                         // Replace directly in our processed string
                         processed = processed.replace(year_str, &year_expansion);
                     }
-                    
+
                     println!("NUMBER EXPANDED: '{}' -> '{}'", chunk, processed);
                 }
-                
+
                 // Then, for Spanish text, check if accents need to be fixed
                 if language.starts_with("es") {
                     // Check if we have encoding issues with Spanish characters
-                    let has_missing_accents = processed.contains("politica") || processed.contains("poltica") || 
-                                            processed.contains("Aqu") || processed.contains("tecnologicas") ||
-                                            processed.contains("publicas") || processed.contains("creacin");
-                    
+                    let has_missing_accents = processed.contains("politica")
+                        || processed.contains("poltica")
+                        || processed.contains("Aqu")
+                        || processed.contains("tecnologicas")
+                        || processed.contains("publicas")
+                        || processed.contains("creacin");
+
                     if has_missing_accents {
-                        println!("FIXING ACCENTS: Detected possible missing accents in Spanish text");
+                        println!(
+                            "FIXING ACCENTS: Detected possible missing accents in Spanish text"
+                        );
                         let fixed = restore_spanish_accents(&processed);
                         println!("Original: {}", processed);
                         println!("After accent fix: {}", fixed);
@@ -749,16 +868,20 @@ impl TTSKoko {
                     processed
                 }
             };
-            
+
             // Add more detailed logging for Spanish words
             if language.starts_with("es") {
                 println!("Spanish text to phonemize: {}", processed_chunk);
             }
-            
+
             // Check if processed chunk has accented characters before phonemization
-            if processed_chunk.contains('á') || processed_chunk.contains('é') || 
-               processed_chunk.contains('í') || processed_chunk.contains('ó') || 
-               processed_chunk.contains('ú') || processed_chunk.contains('ñ') {
+            if processed_chunk.contains('á')
+                || processed_chunk.contains('é')
+                || processed_chunk.contains('í')
+                || processed_chunk.contains('ó')
+                || processed_chunk.contains('ú')
+                || processed_chunk.contains('ñ')
+            {
                 println!("PRE-PHONEMIZE: Text has accented characters");
                 // Show each accented character
                 for (i, c) in processed_chunk.char_indices() {
@@ -767,7 +890,7 @@ impl TTSKoko {
                     }
                 }
             }
-            
+
             // This is where the phonemization happens - a potential point of accent loss
             println!("CALLING PHONEMIZE ON: {}", processed_chunk);
             let mut phonemes = text_to_phonemes(&processed_chunk, &language, None, true, false)
@@ -776,19 +899,20 @@ impl TTSKoko {
                     e
                 })?
                 .join("");
-                
+
             // Check what happened to the accented characters
             println!("PHONEMIZE RESULT: {}", phonemes);
-            
+
             // Apply Spanish-specific phoneme corrections
             if language.starts_with("es") {
                 phonemes = fix_spanish_phonemes(&phonemes);
             }
-            
+
             println!("phonemes: {}", phonemes);
-            
+
             // Add special debug for Spanish problematic words
-            if language.starts_with("es") && (chunk.contains("ción") || chunk.contains("politic")) {
+            if language.starts_with("es") && (chunk.contains("ción") || chunk.contains("politic"))
+            {
                 println!("DEBUG - Spanish special case detected:");
                 println!("Original: {}", chunk);
                 println!("Phonemes after fix: {}", phonemes);
@@ -830,6 +954,34 @@ impl TTSKoko {
         Ok(final_audio)
     }
 
+    pub fn tts_raw_audio_with_phonemes_option(
+        &self,
+        txt: &str,
+        lan: &str,
+        style_name: &str,
+        speed: f32,
+        initial_silence: Option<usize>,
+        auto_detect_language: bool,
+        force_style: bool,
+        phonemes: bool,
+    ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+        if phonemes {
+            // Input is already phonemes, process directly
+            self.tts_phonemes_to_audio(txt, style_name, speed, initial_silence, force_style)
+        } else {
+            // Input is text, convert to phonemes first
+            self.tts_raw_audio(
+                txt,
+                lan,
+                style_name,
+                speed,
+                initial_silence,
+                auto_detect_language,
+                force_style,
+            )
+        }
+    }
+
     pub fn tts(
         &self,
         TTSOpts {
@@ -842,9 +994,24 @@ impl TTSKoko {
             mono,
             speed,
             initial_silence,
+            phonemes,
         }: TTSOpts,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let audio = self.tts_raw_audio(txt, lan, style_name, speed, initial_silence, auto_detect_language, force_style)?;
+        let audio = if phonemes {
+            // Input is already phonemes, process directly
+            self.tts_phonemes_to_audio(txt, style_name, speed, initial_silence, force_style)?
+        } else {
+            // Input is text, convert to phonemes first
+            self.tts_raw_audio(
+                txt,
+                lan,
+                style_name,
+                speed,
+                initial_silence,
+                auto_detect_language,
+                force_style,
+            )?
+        };
 
         // Save to file
         if mono {
@@ -950,20 +1117,20 @@ impl TTSKoko {
         println!("voice styles loaded: {:?}", sorted_voices);
         map
     }
-    
+
     // Method to properly clean up resources before application exit
     // Call this explicitly when done with the TTS engine to avoid segfault
     pub fn cleanup(&self) {
         // This method exists to provide a hook for proper cleanup
         println!("Cleaning up TTS engine resources...");
-        
+
         // Give ONNX Runtime background threads time to complete any pending work
         std::thread::sleep(std::time::Duration::from_millis(100));
-        
+
         // For the Arc<OrtKoko>, check if we're the only holder of the reference
         let count = std::sync::Arc::strong_count(&self.model);
         println!("Current reference count to ONNX model: {}", count);
-        
+
         // If we're the only reference holder, we can try to explicitly drop it
         if count == 1 {
             // This is a hacky way to avoid the mutex error - create a block so the
@@ -973,20 +1140,20 @@ impl TTSKoko {
                 let _temp_clone = self.model.clone();
                 // Let it drop here
             }
-            
+
             // Give time for any mutex operations to complete
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
-        
+
         // Force a GC-like cleanup by allocating and dropping some memory
         {
             let _cleanup_buf = vec![0u8; 4096];
             // Drop it here
         }
-        
+
         // Sleep to let any background threads finish
         std::thread::sleep(std::time::Duration::from_millis(20));
-        
+
         // Note: Unfortunately Rust doesn't give us explicit control over thread synchronization
         // for the ONNX runtime internals. The best we can do is introduce these delays to
         // reduce the likelihood of the mutex error.

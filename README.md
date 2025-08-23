@@ -19,6 +19,7 @@ Language support includes:
 ## Updates
 
 - **_`LATEST`_**:
+  - **Phonemes-to-Speech Mode**: New `--phonemes` flag allows direct phoneme-to-speech conversion, bypassing text-to-phoneme conversion. Works with all modes including `text`, `pipe`, and `stream`.
   - **New CLI command `koko voices`**: List available voice styles with options for JSON, list, or table format, and filtering by language or gender.
   - **New OpenAI server endpoints**:
     - `/v1/audio/voices`: Lists available voice IDs.
@@ -168,6 +169,25 @@ Kokorox supports multiple languages. You can either specify the language manuall
 
 # Explicitly force a style, even if language is different
 ./koko text "Esto es una prueba en español." --lan es --style af_sky --force-style
+```
+
+### Phonemes-to-Speech Mode
+
+Use the `--phonemes` flag to bypass text-to-phoneme conversion and input phonemes directly. This is useful for fine-grained control over pronunciation or when working with pre-processed phonemes.
+
+```bash
+# Generate phonemes first using verbose mode to see them
+echo "hello world" | ./koko -v stream 2>&1 | grep "phonemes:" | head -1
+# Output: phonemes: həˈloʊwɜːrld
+
+# Then use the phonemes directly
+./koko --phonemes text "həˈloʊwɜːrld" -o phonemes_output.wav
+
+# Works with pipe mode too
+echo "həˈloʊwɜːrld" | ./koko --phonemes pipe -o phonemes_pipe.wav
+
+# And stream mode
+echo "həˈloʊwɜːrld" | ./koko --phonemes stream
 ```
 
 ### Debugging Text Processing

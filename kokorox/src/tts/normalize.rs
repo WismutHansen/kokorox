@@ -41,35 +41,36 @@ pub fn expand_decimal_for_tts(num_str: &str, language: &str) -> String {
 
 /// Language-aware function to expand numbers into words
 fn expand_number(num_str: &str, language: &str) -> String {
-    // If not one of the languages we have explicit support for, 
+    // If not one of the languages we have explicit support for,
     // just return the original number string to avoid deletion
-    if !language.starts_with("en") && 
-       !language.starts_with("es") && 
-       !language.starts_with("fr") && 
-       !language.starts_with("de") {
+    if !language.starts_with("en")
+        && !language.starts_with("es")
+        && !language.starts_with("fr")
+        && !language.starts_with("de")
+    {
         return num_str.to_string();
     }
-    
+
     // English number expansion
     if language.starts_with("en") {
         return expand_number_english(num_str);
     }
-    
+
     // Spanish number expansion
     if language.starts_with("es") {
         return expand_number_spanish(num_str);
     }
-    
+
     // French number expansion
     if language.starts_with("fr") {
         return expand_number_french(num_str);
     }
-    
+
     // German number expansion
     if language.starts_with("de") {
         return expand_number_german(num_str);
     }
-    
+
     // Fallback to English
     expand_number_english(num_str)
 }
@@ -97,11 +98,11 @@ fn expand_number_english(num_str: &str) -> String {
                     _ => unreachable!(), // All cases are covered
                 };
             }
-            
+
             // Handle years like 1985 as "nineteen eighty-five"
             let century = year / 100;
             let remainder = year % 100;
-            
+
             let century_words = match century {
                 10 => "ten",
                 11 => "eleven",
@@ -116,11 +117,11 @@ fn expand_number_english(num_str: &str) -> String {
                 20 => "twenty",
                 _ => "",
             };
-            
+
             if remainder == 0 {
                 return format!("{} hundred", century_words);
             }
-            
+
             let remainder_words = if remainder < 10 {
                 // Handle single digits
                 match remainder {
@@ -134,7 +135,8 @@ fn expand_number_english(num_str: &str) -> String {
                     8 => "eight",
                     9 => "nine",
                     _ => "",
-                }.to_string()
+                }
+                .to_string()
             } else if remainder < 20 {
                 // Handle teens
                 match remainder {
@@ -149,7 +151,8 @@ fn expand_number_english(num_str: &str) -> String {
                     18 => "eighteen",
                     19 => "nineteen",
                     _ => "",
-                }.to_string()
+                }
+                .to_string()
             } else {
                 // Handle 20-99
                 let tens = match remainder / 10 {
@@ -163,7 +166,7 @@ fn expand_number_english(num_str: &str) -> String {
                     9 => "ninety",
                     _ => "",
                 };
-                
+
                 let ones = match remainder % 10 {
                     0 => "",
                     1 => "one",
@@ -177,32 +180,32 @@ fn expand_number_english(num_str: &str) -> String {
                     9 => "nine",
                     _ => "",
                 };
-                
+
                 if ones.is_empty() {
                     tens.to_string()
                 } else {
                     format!("{}-{}", tens, ones)
                 }
             };
-            
+
             return format!("{} {}", century_words, remainder_words);
         }
     }
-    
+
     // Convert regular numbers to words
     let num = match num_str.parse::<i64>() {
         Ok(n) => n,
         Err(_) => return num_str.to_string(), // return original if parse fails
     };
-    
+
     if num == 0 {
         return "zero".to_string();
     }
-    
+
     if num < 0 {
         return format!("negative {}", expand_number_english(&(-num).to_string()));
     }
-    
+
     if num <= 20 {
         return match num {
             1 => "one",
@@ -226,9 +229,10 @@ fn expand_number_english(num_str: &str) -> String {
             19 => "nineteen",
             20 => "twenty",
             _ => "",
-        }.to_string();
+        }
+        .to_string();
     }
-    
+
     if num < 100 {
         let tens = match num / 10 {
             2 => "twenty",
@@ -241,7 +245,7 @@ fn expand_number_english(num_str: &str) -> String {
             9 => "ninety",
             _ => "",
         };
-        
+
         let ones = num % 10;
         if ones == 0 {
             return tens.to_string();
@@ -249,49 +253,57 @@ fn expand_number_english(num_str: &str) -> String {
             return format!("{}-{}", tens, expand_number_english(&ones.to_string()));
         }
     }
-    
+
     if num < 1000 {
         let hundreds = num / 100;
         let remainder = num % 100;
-        
+
         if remainder == 0 {
             return format!("{} hundred", expand_number_english(&hundreds.to_string()));
         } else {
-            return format!("{} hundred and {}", expand_number_english(&hundreds.to_string()), expand_number_english(&remainder.to_string()));
+            return format!(
+                "{} hundred and {}",
+                expand_number_english(&hundreds.to_string()),
+                expand_number_english(&remainder.to_string())
+            );
         }
     }
-    
+
     if num < 1_000_000 {
         let thousands = num / 1000;
         let remainder = num % 1000;
-        
+
         if remainder == 0 {
             return format!("{} thousand", expand_number_english(&thousands.to_string()));
         } else {
-            return format!("{} thousand {}", expand_number_english(&thousands.to_string()), expand_number_english(&remainder.to_string()));
+            return format!(
+                "{} thousand {}",
+                expand_number_english(&thousands.to_string()),
+                expand_number_english(&remainder.to_string())
+            );
         }
     }
-    
+
     // For larger numbers, just return the number
     num_str.to_string()
 }
 
 /// Spanish number-to-word conversion
 fn expand_number_spanish(num_str: &str) -> String {
-    // Convert to integer 
+    // Convert to integer
     let num = match num_str.parse::<i64>() {
         Ok(n) => n,
         Err(_) => return num_str.to_string(),
     };
-    
+
     if num == 0 {
         return "cero".to_string();
     }
-    
+
     if num < 0 {
         return format!("menos {}", expand_number_spanish(&(-num).to_string()));
     }
-    
+
     if num <= 30 {
         return match num {
             1 => "uno",
@@ -325,9 +337,10 @@ fn expand_number_spanish(num_str: &str) -> String {
             29 => "veintinueve",
             30 => "treinta",
             _ => "",
-        }.to_string();
+        }
+        .to_string();
     }
-    
+
     if num < 100 {
         let tens = match num / 10 {
             3 => "treinta",
@@ -339,7 +352,7 @@ fn expand_number_spanish(num_str: &str) -> String {
             9 => "noventa",
             _ => "",
         };
-        
+
         let ones = num % 10;
         if ones == 0 {
             return tens.to_string();
@@ -347,15 +360,15 @@ fn expand_number_spanish(num_str: &str) -> String {
             return format!("{} y {}", tens, expand_number_spanish(&ones.to_string()));
         }
     }
-    
+
     if num < 1000 {
         if num == 100 {
             return "cien".to_string();
         }
-        
+
         let hundreds = num / 100;
         let remainder = num % 100;
-        
+
         let hundreds_word = match hundreds {
             1 => "ciento",
             2 => "doscientos",
@@ -368,35 +381,43 @@ fn expand_number_spanish(num_str: &str) -> String {
             9 => "novecientos",
             _ => "",
         };
-        
+
         if remainder == 0 {
             return hundreds_word.to_string();
         } else {
-            return format!("{} {}", hundreds_word, expand_number_spanish(&remainder.to_string()));
+            return format!(
+                "{} {}",
+                hundreds_word,
+                expand_number_spanish(&remainder.to_string())
+            );
         }
     }
-    
+
     if num < 1_000_000 {
         if num == 1000 {
             return "mil".to_string();
         }
-        
+
         let thousands = num / 1000;
         let remainder = num % 1000;
-        
+
         let thousands_word = if thousands == 1 {
             "mil".to_string()
         } else {
             format!("{} mil", expand_number_spanish(&thousands.to_string()))
         };
-        
+
         if remainder == 0 {
             return thousands_word;
         } else {
-            return format!("{} {}", thousands_word, expand_number_spanish(&remainder.to_string()));
+            return format!(
+                "{} {}",
+                thousands_word,
+                expand_number_spanish(&remainder.to_string())
+            );
         }
     }
-    
+
     // Return the original for very large numbers
     num_str.to_string()
 }
@@ -408,15 +429,15 @@ fn expand_number_french(num_str: &str) -> String {
         Ok(n) => n,
         Err(_) => return num_str.to_string(),
     };
-    
+
     if num == 0 {
         return "zéro".to_string();
     }
-    
+
     if num < 0 {
         return format!("moins {}", expand_number_french(&(-num).to_string()));
     }
-    
+
     if num <= 20 {
         return match num {
             1 => "un",
@@ -440,9 +461,10 @@ fn expand_number_french(num_str: &str) -> String {
             19 => "dix-neuf",
             20 => "vingt",
             _ => "",
-        }.to_string();
+        }
+        .to_string();
     }
-    
+
     if num < 100 {
         // French has special cases for 70-99
         match num {
@@ -456,54 +478,61 @@ fn expand_number_french(num_str: &str) -> String {
             91 => return "quatre-vingt-onze".to_string(),
             _ => {}
         }
-        
+
         // Handle 70-79 (soixante-dix, soixante-onze, etc.)
         if (70..80).contains(&num) {
             return format!("soixante-{}", expand_number_french(&(num - 60).to_string()));
         }
-        
+
         // Handle 90-99 (quatre-vingt-dix, quatre-vingt-onze, etc.)
         if (90..100).contains(&num) {
-            return format!("quatre-vingt-{}", expand_number_french(&(num - 80).to_string()));
+            return format!(
+                "quatre-vingt-{}",
+                expand_number_french(&(num - 80).to_string())
+            );
         }
-        
+
         let tens_value = (num / 10) * 10;
         let ones = num % 10;
-        
+
         let tens = match tens_value {
             20 => "vingt",
             30 => "trente",
             40 => "quarante",
             50 => "cinquante",
             60 => "soixante",
-            80 => "quatre-vingts",  // Special case
+            80 => "quatre-vingts", // Special case
             _ => "",
         };
-        
+
         if ones == 0 {
             return tens.to_string();
         } else {
             return format!("{}-{}", tens, expand_number_french(&ones.to_string()));
         }
     }
-    
+
     if num < 1000 {
         let hundreds = num / 100;
         let remainder = num % 100;
-        
+
         let hundreds_word = if hundreds == 1 {
             "cent".to_string()
         } else {
             format!("{} cents", expand_number_french(&hundreds.to_string()))
         };
-        
+
         if remainder == 0 {
             return hundreds_word;
         } else {
-            return format!("{} {}", hundreds_word, expand_number_french(&remainder.to_string()));
+            return format!(
+                "{} {}",
+                hundreds_word,
+                expand_number_french(&remainder.to_string())
+            );
         }
     }
-    
+
     // Return the original for larger numbers
     num_str.to_string()
 }
@@ -515,15 +544,15 @@ fn expand_number_german(num_str: &str) -> String {
         Ok(n) => n,
         Err(_) => return num_str.to_string(),
     };
-    
+
     if num == 0 {
         return "null".to_string();
     }
-    
+
     if num < 0 {
         return format!("minus {}", expand_number_german(&(-num).to_string()));
     }
-    
+
     if num <= 12 {
         return match num {
             1 => "eins",
@@ -539,9 +568,10 @@ fn expand_number_german(num_str: &str) -> String {
             11 => "elf",
             12 => "zwölf",
             _ => "",
-        }.to_string();
+        }
+        .to_string();
     }
-    
+
     if num < 20 {
         // German teens
         let ones = num % 10;
@@ -557,11 +587,11 @@ fn expand_number_german(num_str: &str) -> String {
         };
         return format!("{}zehn", ones_word);
     }
-    
+
     if num < 100 {
         let tens = num / 10;
         let ones = num % 10;
-        
+
         if ones == 0 {
             return match tens {
                 2 => "zwanzig",
@@ -573,11 +603,12 @@ fn expand_number_german(num_str: &str) -> String {
                 8 => "achtzig",
                 9 => "neunzig",
                 _ => "",
-            }.to_string();
+            }
+            .to_string();
         } else {
             // German puts the ones before tens with "und" in between
             let ones_word = match ones {
-                1 => "ein",  // Special case for one
+                1 => "ein", // Special case for one
                 2 => "zwei",
                 3 => "drei",
                 4 => "vier",
@@ -588,7 +619,7 @@ fn expand_number_german(num_str: &str) -> String {
                 9 => "neun",
                 _ => "",
             };
-            
+
             let tens_word = match tens {
                 2 => "zwanzig",
                 3 => "dreißig",
@@ -600,11 +631,11 @@ fn expand_number_german(num_str: &str) -> String {
                 9 => "neunzig",
                 _ => "",
             };
-            
+
             return format!("{}und{}", ones_word, tens_word);
         }
     }
-    
+
     // Return the original for larger numbers
     num_str.to_string()
 }
@@ -613,27 +644,28 @@ fn expand_number_german(num_str: &str) -> String {
 fn expand_decimal(num_str: &str, language: &str) -> String {
     if let Some(point_index) = num_str.find('.') {
         let integer_part = &num_str[0..point_index];
-        let decimal_part = &num_str[point_index+1..];
-        
+        let decimal_part = &num_str[point_index + 1..];
+
         let integer_words = if integer_part.is_empty() || integer_part == "0" {
             match language {
                 lang if lang.starts_with("es") => "cero",
                 lang if lang.starts_with("fr") => "zéro",
                 lang if lang.starts_with("de") => "null",
-                _ => "zero"
-            }.to_string()
+                _ => "zero",
+            }
+            .to_string()
         } else {
             expand_number(integer_part, language)
         };
-        
+
         // Say "point" in the appropriate language
         let point_word = match language {
             lang if lang.starts_with("es") => "punto",
             lang if lang.starts_with("fr") => "virgule",
             lang if lang.starts_with("de") => "komma",
-            _ => "point"
+            _ => "point",
         };
-        
+
         // Say each digit individually for the decimal part
         let mut decimal_words = point_word.to_string();
         for digit in decimal_part.chars() {
@@ -643,68 +675,68 @@ fn expand_decimal(num_str: &str, language: &str) -> String {
                         lang if lang.starts_with("es") => "cero",
                         lang if lang.starts_with("fr") => "zéro",
                         lang if lang.starts_with("de") => "null",
-                        _ => "zero"
+                        _ => "zero",
                     },
                     '1' => match language {
                         lang if lang.starts_with("es") => "uno",
                         lang if lang.starts_with("fr") => "un",
                         lang if lang.starts_with("de") => "eins",
-                        _ => "one"
+                        _ => "one",
                     },
                     '2' => match language {
                         lang if lang.starts_with("es") => "dos",
                         lang if lang.starts_with("fr") => "deux",
                         lang if lang.starts_with("de") => "zwei",
-                        _ => "two"
+                        _ => "two",
                     },
                     '3' => match language {
                         lang if lang.starts_with("es") => "tres",
                         lang if lang.starts_with("fr") => "trois",
                         lang if lang.starts_with("de") => "drei",
-                        _ => "three"
+                        _ => "three",
                     },
                     '4' => match language {
                         lang if lang.starts_with("es") => "cuatro",
                         lang if lang.starts_with("fr") => "quatre",
                         lang if lang.starts_with("de") => "vier",
-                        _ => "four"
+                        _ => "four",
                     },
                     '5' => match language {
                         lang if lang.starts_with("es") => "cinco",
                         lang if lang.starts_with("fr") => "cinq",
                         lang if lang.starts_with("de") => "fünf",
-                        _ => "five"
+                        _ => "five",
                     },
                     '6' => match language {
                         lang if lang.starts_with("es") => "seis",
                         lang if lang.starts_with("fr") => "six",
                         lang if lang.starts_with("de") => "sechs",
-                        _ => "six"
+                        _ => "six",
                     },
                     '7' => match language {
                         lang if lang.starts_with("es") => "siete",
                         lang if lang.starts_with("fr") => "sept",
                         lang if lang.starts_with("de") => "sieben",
-                        _ => "seven"
+                        _ => "seven",
                     },
                     '8' => match language {
                         lang if lang.starts_with("es") => "ocho",
                         lang if lang.starts_with("fr") => "huit",
                         lang if lang.starts_with("de") => "acht",
-                        _ => "eight"
+                        _ => "eight",
                     },
                     '9' => match language {
                         lang if lang.starts_with("es") => "nueve",
                         lang if lang.starts_with("fr") => "neuf",
                         lang if lang.starts_with("de") => "neun",
-                        _ => "nine"
+                        _ => "nine",
                     },
                     _ => "",
                 };
                 decimal_words.push_str(&format!(" {}", digit_word));
             }
         }
-        
+
         format!("{} {}", integer_words, decimal_words)
     } else {
         // No decimal point, just expand as regular number
@@ -714,39 +746,48 @@ fn expand_decimal(num_str: &str, language: &str) -> String {
 
 pub fn normalize_text(text: &str, language: &str) -> String {
     // Debug logging for Spanish text with special characters
-    if text.contains('ñ') || text.contains('á') || text.contains('é') || 
-       text.contains('í') || text.contains('ó') || text.contains('ú') || 
-       text.contains('ü') {
+    if text.contains('ñ')
+        || text.contains('á')
+        || text.contains('é')
+        || text.contains('í')
+        || text.contains('ó')
+        || text.contains('ú')
+        || text.contains('ü')
+    {
         println!("NORMALIZE DEBUG: Text before normalization: {}", text);
         // Print each special character
         for (i, c) in text.char_indices() {
             if !c.is_ascii() {
-                println!("  Before normalization - Pos {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                println!(
+                    "  Before normalization - Pos {}: '{}' (Unicode: U+{:04X})",
+                    i, c, c as u32
+                );
             }
         }
     }
-    
+
     let mut text = text.to_string();
 
     // Replace special quotes and brackets, preserving apostrophes
     // Check if there are apostrophes in the text before processing
     let has_apostrophes = text.contains('\'');
-    
+
     // Only apply apostrophe-safe replacement if apostrophes are detected
     if has_apostrophes {
         // First handle regular quotes safely by checking context
-        text = QUOTES_RE.replace_all(&text, |caps: &regex::Captures| {
-            let quote = &caps[0];
-            let quote_pos = text.find(quote).unwrap_or(0);
-            
-            // Check if this appears to be an apostrophe (surrounded by letters)
-            let is_apostrophe = if quote_pos > 0 && quote_pos < text.len() - 1 {
-                let chars: Vec<char> = text.chars().collect();
-                let prev = chars.get(quote_pos - 1).unwrap_or(&' ');
-                let next = chars.get(quote_pos + 1).unwrap_or(&' ');
-                
-                // Apostrophe pattern: letter+'+'letter or letter+'+s
-                (prev.is_alphabetic() && (next.is_alphabetic() || *next == 's')) ||
+        text = QUOTES_RE
+            .replace_all(&text, |caps: &regex::Captures| {
+                let quote = &caps[0];
+                let quote_pos = text.find(quote).unwrap_or(0);
+
+                // Check if this appears to be an apostrophe (surrounded by letters)
+                let is_apostrophe = if quote_pos > 0 && quote_pos < text.len() - 1 {
+                    let chars: Vec<char> = text.chars().collect();
+                    let prev = chars.get(quote_pos - 1).unwrap_or(&' ');
+                    let next = chars.get(quote_pos + 1).unwrap_or(&' ');
+
+                    // Apostrophe pattern: letter+'+'letter or letter+'+s
+                    (prev.is_alphabetic() && (next.is_alphabetic() || *next == 's')) ||
                 // "I'm", "you're", "he'll", etc.
                 (*prev == 'I' && *next == 'm') ||
                 (text[quote_pos..].starts_with("'m") || 
@@ -754,23 +795,24 @@ pub fn normalize_text(text: &str, language: &str) -> String {
                  text[quote_pos..].starts_with("'ve") || 
                  text[quote_pos..].starts_with("'ll") || 
                  text[quote_pos..].starts_with("'d"))
-            } else {
-                false
-            };
-            
-            if is_apostrophe {
-                // Preserve apostrophes
-                "'"
-            } else {
-                // Replace quotes with regular quote
-                "\""
-            }
-        }).to_string();
+                } else {
+                    false
+                };
+
+                if is_apostrophe {
+                    // Preserve apostrophes
+                    "'"
+                } else {
+                    // Replace quotes with regular quote
+                    "\""
+                }
+            })
+            .to_string();
     } else {
         // No apostrophes detected, use the original replacement
         text = text.replace(['\u{2018}', '\u{2019}'], "'");
     }
-    
+
     // Handle other quotes and brackets
     text = text.replace('«', "\u{201C}").replace('»', "\u{201D}");
     text = text.replace(['\u{201C}', '\u{201D}'], "\"");
@@ -794,48 +836,65 @@ pub fn normalize_text(text: &str, language: &str) -> String {
     text = MRS_RE.replace_all(&text, "Mrs").to_string();
     text = ETC_RE.replace_all(&text, "etc").to_string();
     text = YEAH_RE.replace_all(&text, "${1}e'a").to_string();
-    
+
     // Handle different types of numbers
-    
+
     // Get language-specific texts
     let (dollar_text, pound_text, to_text) = match language {
         lang if lang.starts_with("es") => ("dólar", "libra", "a"),
         lang if lang.starts_with("fr") => ("dollar", "livre", "à"),
         lang if lang.starts_with("de") => ("Dollar", "Pfund", "bis"),
-        _ => ("dollar", "pound", "to")
+        _ => ("dollar", "pound", "to"),
     };
-    
+
     // Expand decimal numbers like 3.14
-    text = POINT_NUM_RE.replace_all(&text, |caps: &regex::Captures| {
-        expand_decimal(&caps[0], language)
-    }).to_string();
-    
+    text = POINT_NUM_RE
+        .replace_all(&text, |caps: &regex::Captures| {
+            expand_decimal(&caps[0], language)
+        })
+        .to_string();
+
     // Remove commas in numbers like 1,000
     text = COMMA_NUM_RE.replace_all(&text, "").to_string();
-    
+
     // Handle ranges like 1-2
-    text = RANGE_RE.replace_all(&text, &format!(" {} ", to_text)).to_string();
-    
+    text = RANGE_RE
+        .replace_all(&text, &format!(" {} ", to_text))
+        .to_string();
+
     // Handle numbers with S like 1980s
     text = S_AFTER_NUM_RE.replace_all(&text, " S").to_string();
-    
+
     // Handle money amounts
-    text = MONEY_RE.replace_all(&text, |caps: &regex::Captures| {
-        let money_str = &caps[0];
-        if money_str.starts_with('$') {
-            format!("{} {}", dollar_text, expand_number(&money_str[1..], language))
-        } else if money_str.starts_with('£') {
-            format!("{} {}", pound_text, expand_number(&money_str[1..], language))
-        } else {
-            money_str.to_string()
-        }
-    }).to_string();
-    
+    text = MONEY_RE
+        .replace_all(&text, |caps: &regex::Captures| {
+            let money_str = &caps[0];
+            if money_str.starts_with('$') {
+                format!(
+                    "{} {}",
+                    dollar_text,
+                    expand_number(&money_str[1..], language)
+                )
+            } else if money_str.starts_with('£') {
+                format!(
+                    "{} {}",
+                    pound_text,
+                    expand_number(&money_str[1..], language)
+                )
+            } else {
+                money_str.to_string()
+            }
+        })
+        .to_string();
+
     // Handle standalone numbers
-    text = Regex::new(r"\b\d+\b").unwrap().replace_all(&text, |caps: &regex::Captures| {
-        expand_number(&caps[0], language)
-    }).to_string();
-    
+    text = Regex::new(r"\b\d+\b")
+        .unwrap()
+        .replace_all(&text, |caps: &regex::Captures| {
+            expand_number(&caps[0], language)
+        })
+        .to_string();
+
     // Handle possessives and other grammatical forms
     text = POSSESSIVE_RE.replace_all(&text, "'S").to_string();
     text = X_POSSESSIVE_RE.replace_all(&text, "s").to_string();
@@ -845,21 +904,29 @@ pub fn normalize_text(text: &str, language: &str) -> String {
         .replace_all(&text, |caps: &regex::Captures| caps[0].replace('.', "-"))
         .to_string();
     text = ACRONYM_RE.replace_all(&text, "-").to_string();
-    
+
     let result = text.trim().to_string();
-    
+
     // Debug logging for Spanish text with special characters after normalization
-    if result.contains('ñ') || result.contains('á') || result.contains('é') || 
-       result.contains('í') || result.contains('ó') || result.contains('ú') || 
-       result.contains('ü') {
+    if result.contains('ñ')
+        || result.contains('á')
+        || result.contains('é')
+        || result.contains('í')
+        || result.contains('ó')
+        || result.contains('ú')
+        || result.contains('ü')
+    {
         println!("NORMALIZE DEBUG: Text after normalization: {}", result);
         // Print each special character
         for (i, c) in result.char_indices() {
             if !c.is_ascii() {
-                println!("  After normalization - Pos {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                println!(
+                    "  After normalization - Pos {}: '{}' (Unicode: U+{:04X})",
+                    i, c, c as u32
+                );
             }
         }
     }
-    
+
     result
 }

@@ -1,13 +1,13 @@
+use lazy_static::lazy_static;
 /// Simple fallback phonemizer that doesn't require external dependencies
 /// This provides basic phonemization when DeepPhonemizer is not available
 use std::collections::HashMap;
-use lazy_static::lazy_static;
 
 lazy_static! {
     // Basic grapheme-to-phoneme mapping for English
     static ref SIMPLE_G2P: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
-        
+
         // Common English words and their IPA transcriptions
         m.insert("hello", "həˈloʊ");
         m.insert("world", "wɜːrld");
@@ -19,7 +19,7 @@ lazy_static! {
         m.insert("my", "maɪ");
         m.insert("shopping", "ˈʃɑːpɪŋ");
         m.insert("list", "lɪst");
-        
+
         // Common Spanish words and their IPA transcriptions
         m.insert("hola", "ˈola");
         m.insert("cómo", "ˈkomo");
@@ -65,15 +65,15 @@ lazy_static! {
         m.insert("below", "bɪˈloʊ");
         m.insert("inside", "ɪnˈsaɪd");
         m.insert("outside", "ˌaʊtˈsaɪd");
-        
+
         m
     };
-    
+
     // Basic character-level fallback for unknown words
     static ref CHAR_TO_PHONEME: HashMap<char, &'static str> = {
         let mut m = HashMap::new();
-        
-        // Basic Latin characters  
+
+        // Basic Latin characters
         m.insert('a', "æ");
         m.insert('b', "b");
         m.insert('c', "k");
@@ -100,7 +100,7 @@ lazy_static! {
         m.insert('x', "ks");
         m.insert('y', "j");
         m.insert('z', "z");
-        
+
         // Spanish accented characters
         m.insert('á', "a");
         m.insert('é', "e");
@@ -109,7 +109,7 @@ lazy_static! {
         m.insert('ú', "u");
         m.insert('ñ', "ɲ");
         m.insert('ü', "u");
-        
+
         // Uppercase versions
         m.insert('Á', "a");
         m.insert('É', "e");
@@ -118,7 +118,7 @@ lazy_static! {
         m.insert('Ú', "u");
         m.insert('Ñ', "ɲ");
         m.insert('Ü', "u");
-        
+
         m
     };
 }
@@ -127,20 +127,35 @@ pub fn simple_phonemize(text: &str, _language: &str) -> String {
     let text = text.to_lowercase();
     let words: Vec<&str> = text.split_whitespace().collect();
     let mut phonemes = Vec::new();
-    
+
     for word in words {
         // Remove punctuation but preserve accented characters
         // The issue was that is_alphabetic() returns false for accented characters like ó, á, etc.
         // We need to include Unicode letters and combining marks
         let clean_word = word.trim_matches(|c: char| {
-            !c.is_alphabetic() && 
-            !matches!(c, 'á' | 'é' | 'í' | 'ó' | 'ú' | 'ñ' | 'ü' | 'Á' | 'É' | 'Í' | 'Ó' | 'Ú' | 'Ñ' | 'Ü')
+            !c.is_alphabetic()
+                && !matches!(
+                    c,
+                    'á' | 'é'
+                        | 'í'
+                        | 'ó'
+                        | 'ú'
+                        | 'ñ'
+                        | 'ü'
+                        | 'Á'
+                        | 'É'
+                        | 'Í'
+                        | 'Ó'
+                        | 'Ú'
+                        | 'Ñ'
+                        | 'Ü'
+                )
         });
-        
+
         if clean_word.is_empty() {
             continue;
         }
-        
+
         // Try exact word lookup first
         if let Some(&phoneme) = SIMPLE_G2P.get(clean_word) {
             phonemes.push(phoneme.to_string());
@@ -158,21 +173,18 @@ pub fn simple_phonemize(text: &str, _language: &str) -> String {
             phonemes.push(word_phonemes);
         }
     }
-    
+
     phonemes.join(" ")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_simple_phonemization() {
-        assert_eq!(
-            simple_phonemize("hello world", "en"),
-            "həˈloʊ wɜːrld"
-        );
-        
+        assert_eq!(simple_phonemize("hello world", "en"), "həˈloʊ wɜːrld");
+
         assert_eq!(
             simple_phonemize("can you add cheese", "en"),
             "kæn juː æd tʃiːz"
@@ -183,26 +195,29 @@ mod tests {
     fn test_spanish_accented_characters() {
         // Test the specific case that was failing: "Hola, ¿cómo estás hoy?"
         let result = simple_phonemize("Hola, ¿cómo estás hoy?", "es");
-        
+
         // The phonemizer should preserve and handle accented characters
         // It should not strip out ó and á like it was doing before
-        assert!(result.contains("ˈkomo"), "Should contain phoneme for 'cómo'");
-        assert!(result.contains("esˈtas"), "Should contain phoneme for 'estás'");
-        
+        assert!(
+            result.contains("ˈkomo"),
+            "Should contain phoneme for 'cómo'"
+        );
+        assert!(
+            result.contains("esˈtas"),
+            "Should contain phoneme for 'estás'"
+        );
+
         // Test individual words
-        assert_eq!(
-            simple_phonemize("cómo", "es"),
-            "ˈkomo"
-        );
-        
-        assert_eq!(
-            simple_phonemize("estás", "es"),
-            "esˈtas"
-        );
-        
+        assert_eq!(simple_phonemize("cómo", "es"), "ˈkomo");
+
+        assert_eq!(simple_phonemize("estás", "es"), "esˈtas");
+
         // Test that accented characters are preserved in unknown words
         let result_unknown = simple_phonemize("política", "es");
-        assert!(result_unknown.contains("i"), 
-                "Should preserve accented characters in unknown words: got '{}'", result_unknown);
+        assert!(
+            result_unknown.contains("i"),
+            "Should preserve accented characters in unknown words: got '{}'",
+            result_unknown
+        );
     }
 }
