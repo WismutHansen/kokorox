@@ -175,6 +175,7 @@ async fn synthesize_streaming(
             None,
             false,
             true,
+            false,  // phonemes mode not supported for WebSocket API
         ) {
             Ok(audio) => Some(audio),
             Err(_) => {

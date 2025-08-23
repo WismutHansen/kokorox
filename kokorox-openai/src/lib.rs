@@ -282,6 +282,7 @@ async fn handle_tts(
             initial_silence,
             auto_detect_language,
             force_style,
+            false,  // phonemes mode not supported for OpenAI API
         )
         .map_err(SpeechError::Koko)?;
 

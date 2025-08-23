@@ -278,6 +278,15 @@ struct Cli {
     )]
     debug_accents: bool,
 
+    /// Use input as IPA phonemes instead of graphemes (bypasses phonemizer)
+    /// When enabled, the input text is treated as IPA phonemes and sent directly to the tokenizer
+    #[arg(
+        long = "phonemes",
+        help = "Treat input as IPA phonemes instead of text (bypasses phonemizer)",
+        default_value_t = false
+    )]
+    phonemes: bool,
+
     #[command(subcommand)]
     mode: Mode,
 }
@@ -802,6 +811,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             mono,
             verbose,
             debug_accents,
+            phonemes,
             mode,
             silent,
         } = cli;
@@ -831,6 +841,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mono,
                         speed,
                         initial_silence,
+                        phonemes,
                     })?;
                 }
             }
@@ -847,6 +858,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     mono,
                     speed,
                     initial_silence,
+                    phonemes,
                 })?;
                 println!("Time taken: {:?}", s.elapsed());
                 let words_per_second =
@@ -916,7 +928,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         eprintln!("Preprocessed: {}", final_text);
                     }
                     
-                    match tts.tts_raw_audio(&final_text, &lan, &style, speed, initial_silence, auto_detect, force_style) {
+                    match tts.tts_raw_audio(&final_text, &lan, &style, speed, initial_silence, auto_detect, force_style, phonemes) {
                         Ok(raw_audio) => {
                             // Write the raw audio samples directly
                             write_audio_chunk(&mut stdout, &raw_audio)?;
@@ -1463,7 +1475,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             speed,
                             initial_silence,
                             false,  // Never auto-detect again
-                            true    // Force the selected style
+                            true,   // Force the selected style
+                            phonemes
                         ) {
                             Ok(audio) => {
                                 // Stream this chunk immediately
@@ -1560,7 +1573,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         speed,
                         initial_silence,
                         false,
-                        true
+                        true,
+                        phonemes
                     ) {
                         Ok(audio) => {
                             // Stream final chunk

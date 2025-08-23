@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use parking_lot::Mutex;
 
 use ndarray::{ArrayBase, IxDyn, OwnedRepr};
 use ort::{
@@ -10,18 +11,20 @@ use super::ort_base;
 use ort_base::OrtBase;
 
 pub struct OrtKoko {
-    sess: Option<Session>,
+    sess: Option<Mutex<Session>>,
 }
 
 unsafe impl Send for OrtKoko {}
 unsafe impl Sync for OrtKoko {}
 impl ort_base::OrtBase for OrtKoko {
     fn set_sess(&mut self, sess: Session) {
-        self.sess = Some(sess);
+        self.sess = Some(Mutex::new(sess));
     }
 
     fn sess(&self) -> Option<&Session> {
-        self.sess.as_ref()
+        // Can't return reference to session inside Mutex, so just return None
+        // The print_info functionality will be disabled for now
+        None
     }
 }
 impl OrtKoko {
@@ -72,11 +75,15 @@ impl OrtKoko {
         ];
 
         if let Some(sess) = &self.sess {
+            let mut sess = sess.lock();
             let outputs: SessionOutputs = sess.run(SessionInputs::from(inputs))?;
-            let output = outputs["audio"]
+            let (shape, data) = outputs["audio"]
                 .try_extract_tensor::<f32>()
-                .expect("Failed to extract tensor")
-                .into_owned();
+                .expect("Failed to extract tensor");
+            // Convert the shape to a vector of dimensions
+            let dims: Vec<usize> = shape.iter().map(|&dim| dim as usize).collect();
+            let output = ArrayBase::from_shape_vec(IxDyn(&dims), data.to_vec())
+                .expect("Failed to create ndarray");
             Ok(output)
         } else {
             Err("Session is not initialized.".into())

@@ -23,6 +23,7 @@ pub struct TTSOpts<'a> {
     pub mono: bool,
     pub speed: f32,
     pub initial_silence: Option<usize>,
+    pub phonemes: bool,  // Whether input is IPA phonemes instead of text
 }
 
 #[derive(Clone)]
@@ -507,6 +508,7 @@ impl TTSKoko {
         initial_silence: Option<usize>,
         auto_detect_language: bool,
         force_style: bool,
+        phonemes: bool,
     ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
         // Split text into appropriate chunks
         let chunks = self.split_text_into_chunks(txt, 500); // Using 500 to leave 12 tokens of margin
@@ -710,22 +712,30 @@ impl TTSKoko {
                 }
             }
             
-            // This is where the phonemization happens - a potential point of accent loss
-            println!("CALLING PHONEMIZE ON: {}", processed_chunk);
-            let mut phonemes = text_to_phonemes(&processed_chunk, &language, None, true, false)
-                .map_err(|e| {
-                    println!("PHONEMIZE ERROR: {}", e);
-                    Box::new(e) as Box<dyn std::error::Error>
-                })?
-                .join("");
+            let phonemes = if phonemes {
+                // When --phonemes flag is used, treat input as IPA phonemes directly
+                println!("PHONEMES MODE: Using input as IPA phonemes directly: {}", processed_chunk);
+                processed_chunk.to_string()
+            } else {
+                // This is where the phonemization happens - a potential point of accent loss
+                println!("CALLING PHONEMIZE ON: {}", processed_chunk);
+                let mut phonemes = text_to_phonemes(&processed_chunk, &language, None, true, false)
+                    .map_err(|e| {
+                        println!("PHONEMIZE ERROR: {}", e);
+                        Box::new(e) as Box<dyn std::error::Error>
+                    })?
+                    .join("");
+                    
+                // Check what happened to the accented characters
+                println!("PHONEMIZE RESULT: {}", phonemes);
                 
-            // Check what happened to the accented characters
-            println!("PHONEMIZE RESULT: {}", phonemes);
-            
-            // Apply Spanish-specific phoneme corrections
-            if language.starts_with("es") {
-                phonemes = fix_spanish_phonemes(&phonemes);
-            }
+                // Apply Spanish-specific phoneme corrections
+                if language.starts_with("es") {
+                    phonemes = fix_spanish_phonemes(&phonemes);
+                }
+                
+                phonemes
+            };
             
             println!("phonemes: {}", phonemes);
             
@@ -784,9 +794,10 @@ impl TTSKoko {
             mono,
             speed,
             initial_silence,
+            phonemes,
         }: TTSOpts,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let audio = self.tts_raw_audio(txt, lan, style_name, speed, initial_silence, auto_detect_language, force_style)?;
+        let audio = self.tts_raw_audio(txt, lan, style_name, speed, initial_silence, auto_detect_language, force_style, phonemes)?;
 
         // Save to file
         if mono {
