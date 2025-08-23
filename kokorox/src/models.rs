@@ -98,7 +98,10 @@ impl ModelManager {
             }
             #[cfg(not(target_os = "macos"))]
             {
-                PathBuf::from(home).join(".cache").join("huggingface").join("hub")
+                PathBuf::from(home)
+                    .join(".cache")
+                    .join("huggingface")
+                    .join("hub")
             }
         } else if let Some(appdata) = std::env::var_os("APPDATA") {
             PathBuf::from(appdata).join("huggingface").join("hub")
@@ -178,8 +181,7 @@ impl ModelManager {
         } else {
             Err(Box::new(ModelDownloadError {
                 message: format!(
-                    "Model {} was downloaded but not found at expected path",
-                    model_name
+                    "Model {model_name} was downloaded but not found at expected path"
                 ),
             }))
         }
@@ -191,7 +193,7 @@ impl ModelManager {
             .model_registry
             .get(model_name)
             .ok_or_else(|| ModelDownloadError {
-                message: format!("Unknown model: {}", model_name),
+                message: format!("Unknown model: {model_name}"),
             })?;
 
         let models_dir = self.cache_dir.join("models");
@@ -211,7 +213,7 @@ impl ModelManager {
                 .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")?
                 .progress_chars("##-"),
         );
-        pb.set_message(format!("Downloading {}", model_name));
+        pb.set_message(format!("Downloading {model_name}"));
 
         // Download the file
         let response = reqwest::get(&model_info.url).await?;
@@ -233,16 +235,16 @@ impl ModelManager {
             pb.set_position(downloaded);
         }
 
-        pb.finish_with_message(format!("Downloaded {}", model_name));
+        pb.finish_with_message(format!("Downloaded {model_name}"));
         file.flush().await?;
 
         // TODO: Verify checksum if available
         if let Some(_checksum) = &model_info.checksum {
             // Implement checksum verification
-            println!("TODO: Verify checksum for {}", model_name);
+            println!("TODO: Verify checksum for {model_name}");
         }
 
-        println!("Successfully downloaded {} to {:?}", model_name, model_path);
+        println!("Successfully downloaded {model_name} to {model_path:?}");
         Ok(())
     }
 
@@ -280,8 +282,7 @@ impl ModelManager {
             // For unsupported languages, fall back to multi-language model
             _ => {
                 println!(
-                    "Warning: Language '{}' not specifically supported, using multi-language model",
-                    language
+                    "Warning: Language '{language}' not specifically supported, using multi-language model"
                 );
                 Ok("deepphonemizer_latin_ipa".to_string())
             }
@@ -379,8 +380,7 @@ impl ModelManager {
         async_fs::write(config_path, yaml_content).await?;
 
         println!(
-            "Created DeepPhonemizer config for {} at {:?}",
-            model_name, config_path
+            "Created DeepPhonemizer config for {model_name} at {config_path:?}"
         );
         Ok(())
     }

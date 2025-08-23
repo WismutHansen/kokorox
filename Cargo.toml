@@ -1,5 +1,5 @@
 [workspace]
-members = ["koko", "kokorox", "kokorox-openai", "kokorox-websocket"]
+members = ["koko", "kokorox"]
 resolver = "2"
 
 

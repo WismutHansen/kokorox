@@ -43,13 +43,15 @@ impl OrtKoko {
         // 1,N 1,256
         // [[0, 56, 51, 142, 156, 69, 63, 3, 16, 61, 4, 16, 156, 51, 4, 16, 62, 77, 156, 51, 86, 5, 0]]
 
-        // Prepend 3 tokens to the first entry, to workaround initial silence issue
-        // Make sure the first token is 0, I think it might be important?
-        // let mut tokens = tokens;
-        // let mut first_entry = tokens[0].clone();
-        // let initial_pause = vec![0, 30, 30, 30];
-        // first_entry.splice(0..1, initial_pause);
-        // tokens[0] = first_entry;
+        // Add slightly more padding to prevent first letter truncation
+        let mut tokens = tokens;
+        if !tokens.is_empty() && !tokens[0].is_empty() {
+            let mut first_entry = tokens[0].clone();
+            // Increase padding slightly to prevent first letter truncation
+            let initial_silence = vec![0, 0, 0];
+            first_entry.splice(0..1, initial_silence);
+            tokens[0] = first_entry;
+        }
 
         let shape = [tokens.len(), tokens[0].len()];
         let tokens_flat: Vec<i64> = tokens.into_iter().flatten().collect();
@@ -57,7 +59,7 @@ impl OrtKoko {
         let tokens_value: SessionInputValue = SessionInputValue::Owned(Value::from(tokens));
 
         let shape_style = [styles.len(), styles[0].len()];
-        eprintln!("shape_style: {:?}", shape_style);
+        eprintln!("shape_style: {shape_style:?}");
         let style_flat: Vec<f32> = styles.into_iter().flatten().collect();
         let style = Tensor::from_array((shape_style, style_flat))?;
         let style_value: SessionInputValue = SessionInputValue::Owned(Value::from(style));
@@ -79,6 +81,11 @@ impl OrtKoko {
                 .try_extract_tensor::<f32>()
                 .expect("Failed to extract tensor");
             let dims: Vec<usize> = tensor_shape.iter().map(|&dim| dim as usize).collect();
+            
+            // Debug: Check if we're getting the full tensor data
+            // Debug removed for cleaner output
+            
+            // Use the complete data vector - ensure no truncation
             let output = ArrayBase::from_shape_vec(IxDyn(&dims), data.to_vec())
                 .expect("Failed to create array from tensor data");
             Ok(output)

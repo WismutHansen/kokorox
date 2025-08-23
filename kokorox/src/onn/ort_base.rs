@@ -25,13 +25,13 @@ pub trait OrtBase {
             Ok(builder) => {
                 let session = builder
                     .with_execution_providers(providers)
-                    .map_err(|e| format!("Failed to build session: {}", e))?
+                    .map_err(|e| format!("Failed to build session: {e}"))?
                     .commit_from_file(model_path)
-                    .map_err(|e| format!("Failed to commit from file: {}", e))?;
+                    .map_err(|e| format!("Failed to commit from file: {e}"))?;
                 self.set_sess(session);
                 Ok(())
             }
-            Err(e) => Err(format!("Failed to create session builder: {}", e)),
+            Err(e) => Err(format!("Failed to create session builder: {e}")),
         }
     }
 

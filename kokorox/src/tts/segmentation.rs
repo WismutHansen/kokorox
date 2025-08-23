@@ -32,17 +32,17 @@ pub fn split_into_sentences(text: &str) -> Vec<String> {
             }
 
             if is_sentence_end {
-                // Consume any trailing whitespace
-                while i + 1 < chars.len() && chars[i + 1].is_whitespace() {
-                    i += 1;
-                    current_sentence.push(chars[i]);
-                }
-
-                let trimmed = current_sentence.trim().to_string();
+                // Only trim trailing whitespace, preserve sentence content
+                let trimmed = current_sentence.trim_end().to_string();
                 if !trimmed.is_empty() {
                     sentences.push(trimmed);
                 }
                 current_sentence.clear();
+                
+                // Skip any whitespace after the sentence ending
+                while i + 1 < chars.len() && chars[i + 1].is_whitespace() {
+                    i += 1;
+                }
             }
         }
 

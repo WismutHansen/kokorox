@@ -15,10 +15,13 @@ impl WavHeader {
         }
     }
 
-    pub fn write_header<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+    pub fn write_header<W: Write>(&self, writer: &mut W, data_size: u32) -> io::Result<()> {
+        // Calculate chunk size (total file size - 8 bytes for RIFF identifier and chunk size)
+        let chunk_size = 4 + 8 + 16 + 8 + data_size; // "WAVE" + fmt chunk header + fmt data + data chunk header + data
+
         // RIFF header
         writer.write_all(b"RIFF")?;
-        writer.write_all(&[0xFF, 0xFF, 0xFF, 0xFF])?; // File size - 8 (placeholder)
+        writer.write_all(&chunk_size.to_le_bytes())?; // Chunk size (total file size - 8)
         writer.write_all(b"WAVE")?;
 
         // Format chunk
@@ -36,7 +39,7 @@ impl WavHeader {
 
         // Data chunk header
         writer.write_all(b"data")?;
-        writer.write_all(&[0xFF, 0xFF, 0xFF, 0xFF])?; // Data size (placeholder)
+        writer.write_all(&data_size.to_le_bytes())?; // Actual data size
 
         Ok(())
     }

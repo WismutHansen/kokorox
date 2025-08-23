@@ -16,7 +16,7 @@ pub async fn download_file_from_url(
     if resp.status().is_success() {
         let total_size = resp.content_length().unwrap_or(0);
 
-        eprintln!("Downloading {} - total size: {}", path, total_size);
+        eprintln!("Downloading {path} - total size: {total_size}");
 
         let pb = ProgressBar::new(total_size);
         pb.set_style(ProgressStyle::default_bar()

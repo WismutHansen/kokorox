@@ -1,37 +1,32 @@
 use mp3lame_encoder::{Builder, FlushNoGap, Id3Tag, MonoPcm};
 
 pub fn pcm_to_mp3(pcm_data: &[f32], sample_rate: u32) -> Result<Vec<u8>, std::io::Error> {
-    let mut mp3_encoder = Builder::new().ok_or(std::io::Error::new(
-        std::io::ErrorKind::Other,
+    let mut mp3_encoder = Builder::new().ok_or(std::io::Error::other(
         "Encoder init failed".to_string(),
     ))?;
 
     mp3_encoder.set_num_channels(1).map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Set channels failed: {:?}", e),
+        std::io::Error::other(
+            format!("Set channels failed: {e:?}"),
         )
     })?;
     mp3_encoder.set_sample_rate(sample_rate).map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Set sample rate failed: {:?}", e),
+        std::io::Error::other(
+            format!("Set sample rate failed: {e:?}"),
         )
     })?;
     mp3_encoder
         .set_brate(mp3lame_encoder::Bitrate::Kbps192)
         .map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Set bitrate failed: {:?}", e),
+            std::io::Error::other(
+                format!("Set bitrate failed: {e:?}"),
             )
         })?;
     mp3_encoder
         .set_quality(mp3lame_encoder::Quality::Best)
         .map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Set quality failed: {:?}", e),
+            std::io::Error::other(
+                format!("Set quality failed: {e:?}"),
             )
         })?;
 
@@ -45,9 +40,8 @@ pub fn pcm_to_mp3(pcm_data: &[f32], sample_rate: u32) -> Result<Vec<u8>, std::io
     });
 
     let mut mp3_encoder = mp3_encoder.build().map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Build encoder failed: {:?}", e),
+        std::io::Error::other(
+            format!("Build encoder failed: {e:?}"),
         )
     })?;
 
@@ -63,9 +57,8 @@ pub fn pcm_to_mp3(pcm_data: &[f32], sample_rate: u32) -> Result<Vec<u8>, std::io
     let encoded_size = mp3_encoder
         .encode(pcm, mp3_out_buffer.spare_capacity_mut())
         .map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Encoding failed: {:?}", e),
+            std::io::Error::other(
+                format!("Encoding failed: {e:?}"),
             )
         })?;
 
@@ -76,7 +69,7 @@ pub fn pcm_to_mp3(pcm_data: &[f32], sample_rate: u32) -> Result<Vec<u8>, std::io
     let flush_size = mp3_encoder
         .flush::<FlushNoGap>(mp3_out_buffer.spare_capacity_mut())
         .map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("Flush failed: {:?}", e))
+            std::io::Error::other(format!("Flush failed: {e:?}"))
         })?;
     unsafe {
         mp3_out_buffer.set_len(mp3_out_buffer.len().wrapping_add(flush_size));
