@@ -1232,30 +1232,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                         
-                        // First, check for directly connected year+to patterns and separate them
-                        let buffer_fixed = buffer.replace("1939to", "1939 to")
-                                                .replace("1940to", "1940 to")
-                                                .replace("1941to", "1941 to")
-                                                .replace("1942to", "1942 to")
-                                                .replace("1945to", "1945 to");
-                        
-                        // Very important: Don't let the sentence_segmentation library process the text
-                        // directly, as it causes issues with apostrophes. Let's pre-process it ourselves.
-                        let pre_processed = if buffer_fixed.contains('\'') {
+                        // In phonemes mode, skip all text preprocessing to preserve IPA symbols
+                        let pre_processed = if phonemes {
                             if verbose {
-                                println!("PRESERVING APOSTROPHES: Text contains apostrophes that need protection");
+                                println!("PHONEMES MODE: Skipping text preprocessing to preserve IPA symbols");
                             }
-                            // Use a special ASCII code that we'll replace back after segmentation
-                            buffer_fixed.replace('\'', "__APOSTROPHE__")
+                            buffer.clone()
                         } else {
-                            buffer_fixed
+                            // First, check for directly connected year+to patterns and separate them
+                            let buffer_fixed = buffer.replace("1939to", "1939 to")
+                                                    .replace("1940to", "1940 to")
+                                                    .replace("1941to", "1941 to")
+                                                    .replace("1942to", "1942 to")
+                                                    .replace("1945to", "1945 to");
+                            
+                            // Very important: Don't let the sentence_segmentation library process the text
+                            // directly, as it causes issues with apostrophes. Let's pre-process it ourselves.
+                            if buffer_fixed.contains('\'') {
+                                if verbose {
+                                    println!("PRESERVING APOSTROPHES: Text contains apostrophes that need protection");
+                                }
+                                // Use a special ASCII code that we'll replace back after segmentation
+                                buffer_fixed.replace('\'', "__APOSTROPHE__")
+                            } else {
+                                buffer_fixed
+                            }
                         };
                                                 
                         // Use our UTF-8 safe sentence segmentation function with proper language handling
-                        let mut sentences = utf8_safe_sentence_segmentation(&pre_processed, &session_language, verbose, debug_accents);
+                        // In phonemes mode, skip segmentation to preserve IPA symbols
+                        let mut sentences = if phonemes {
+                            // In phonemes mode, treat the entire input as one sentence
+                            vec![pre_processed.clone()]
+                        } else {
+                            utf8_safe_sentence_segmentation(&pre_processed, &session_language, verbose, debug_accents)
+                        };
                         
-                        // Restore any apostrophes that were temporarily replaced
-                        if pre_processed.contains("__APOSTROPHE__") {
+                        // Restore any apostrophes that were temporarily replaced (skip in phonemes mode)
+                        if !phonemes && pre_processed.contains("__APOSTROPHE__") {
                             if verbose {
                                 println!("RESTORING APOSTROPHES: Replacing placeholders with actual apostrophes");
                             }
@@ -1344,11 +1358,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     
                     // Handle special case: no complete sentences but substantial text
-                    if complete_sentences.is_empty() && buffer.len() > 200 {
+                    // In phonemes mode, don't split the buffer - process everything as one chunk
+                    if !phonemes && complete_sentences.is_empty() && buffer.len() > 200 {
                         if verbose {
                             eprintln!("Processing substantial incomplete text segment...");
                         }
-                        let end_index = if buffer.len() > 200 { 200 } else { buffer.len() };
+                        // Find a safe character boundary near position 200
+                        let target_len = 200;
+                        let end_index = if buffer.len() > target_len {
+                            // Find the nearest character boundary at or before position 200
+                            buffer.char_indices()
+                                .take_while(|(byte_idx, _)| *byte_idx < target_len)
+                                .last()
+                                .map(|(byte_idx, ch)| byte_idx + ch.len_utf8())
+                                .unwrap_or(target_len.min(buffer.len()))
+                        } else {
+                            buffer.len()
+                        };
                         let segment = buffer[..end_index].to_string();
                         complete_sentences.push(segment.clone());
                         buffer = buffer[end_index..].to_string();
@@ -1511,13 +1537,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !buffer.trim().is_empty() {
                     eprintln!("Processing final text: {}", buffer.trim());
                     
-                    // Add period if needed
-                    let mut final_text = if !(buffer.trim().ends_with('.') || 
-                                        buffer.trim().ends_with('!') || 
-                                        buffer.trim().ends_with('?')) {
-                        format!("{}.", buffer.trim())
+                    // In phonemes mode, don't add punctuation - use text as-is
+                    let mut final_text = if phonemes {
+                        buffer.trim().to_string()
                     } else {
-                        buffer.trim().to_string() 
+                        // Add period if needed for regular text mode
+                        if !(buffer.trim().ends_with('.') || 
+                            buffer.trim().ends_with('!') || 
+                            buffer.trim().ends_with('?')) {
+                            format!("{}.", buffer.trim())
+                        } else {
+                            buffer.trim().to_string() 
+                        }
                     };
                     
                     // Always check for UTF-8 validity before processing
@@ -1533,8 +1564,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                      final_text.contains('ú') || final_text.contains('ñ') || 
                                      final_text.contains('ü');
                     
-                    // For Spanish text, always try to restore accents
-                    if session_language.starts_with("es") {
+                    // For Spanish text, always try to restore accents (skip in phonemes mode)
+                    if !phonemes && session_language.starts_with("es") {
                         // Log pre-restoration state
                         if has_accents {
                             eprintln!("FINAL TEXT HAS ACCENTS: Accented characters present before restoration");
@@ -1567,14 +1598,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     
                     // Apply preprocessing to handle problematic patterns like year ranges
-                    let preprocessed_text = preprocess_text_for_segmentation(&final_text, verbose);
-                    let final_preprocessed = preprocessed_text.replace("→", " ");
-                    
-                    if verbose && final_preprocessed != final_text {
-                        eprintln!("PREPROCESSING FINAL TEXT: Text was preprocessed for better TTS handling");
-                        eprintln!("Original: {}", final_text);
-                        eprintln!("Preprocessed: {}", final_preprocessed);
-                    }
+                    let final_preprocessed = if phonemes {
+                        if verbose {
+                            eprintln!("PHONEMES MODE: Skipping final text preprocessing");
+                        }
+                        final_text.clone()
+                    } else {
+                        let preprocessed_text = preprocess_text_for_segmentation(&final_text, verbose);
+                        let processed = preprocessed_text.replace("→", " ");
+                        
+                        if verbose && processed != final_text {
+                            eprintln!("PREPROCESSING FINAL TEXT: Text was preprocessed for better TTS handling");
+                            eprintln!("Original: {}", final_text);
+                            eprintln!("Preprocessed: {}", processed);
+                        }
+                        processed
+                    };
                     
                     // Generate audio with consistent settings
                     match tts.tts_raw_audio(

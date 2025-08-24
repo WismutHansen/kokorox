@@ -24,6 +24,7 @@ mp3lame-encoder = "0.2.1"
 parking_lot = "0.12"
 hf-hub = { version = "0.3", features = ["tokio"] }
 dirs = "5.0"
+zip = { version = "2.4", default-features = false, features = ["deflate"] }
 
 # Base ONNX Runtime configuration
 ort = { version = "2.0.0-rc.10", default-features = true }

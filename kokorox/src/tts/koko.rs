@@ -732,8 +732,8 @@ impl TTSKoko {
             
             let phonemes = if phonemes {
                 // When --phonemes flag is used, treat input as IPA phonemes directly
-                println!("PHONEMES MODE: Using input as IPA phonemes directly: {}", processed_chunk);
-                processed_chunk.to_string()
+                println!("PHONEMES MODE: Using input as IPA phonemes directly: {}", chunk);
+                chunk.to_string()
             } else {
                 // This is where the phonemization happens - a potential point of accent loss
                 println!("CALLING PHONEMIZE ON: {}", processed_chunk);

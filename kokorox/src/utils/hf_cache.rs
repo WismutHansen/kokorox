@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 use dirs::cache_dir;
 use hf_hub::api::tokio::Api;
+use ndarray::Array3;
+use std::io::Write;
+use zip::write::FileOptions;
 
 const HF_REPO: &str = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const DEFAULT_MODEL_FILE: &str = "onnx/model.onnx";
@@ -72,48 +75,111 @@ pub async fn download_voice(voice_name: &str) -> Result<PathBuf, Box<dyn std::er
     Ok(cache_path)
 }
 
-/// Download the original combined voices file as fallback
-pub async fn download_original_voices_file() -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+
+
+/// Create a proper NPZ file from individual voice files
+pub async fn download_and_create_voices_file(voice_names: Vec<&str>) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     let cache_path = get_default_voices_path();
-    let original_url = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin";
     
-    println!("📦 Downloading original combined voices file...");
-    println!("   URL: {}", original_url);
+    // If combined file already exists, return it
+    if cache_path.exists() {
+        return Ok(cache_path);
+    }
     
+    println!("🎭 Creating NPZ file from {} individual voice files...", voice_names.len());
+    println!("   Repository: {}", HF_REPO);
     std::fs::create_dir_all(cache_path.parent().unwrap())?;
     
-    // Download the original combined voices file
-    crate::utils::fileio::download_file_from_url(original_url, cache_path.to_string_lossy().as_ref())
-        .await
-        .map_err(|e| format!("Failed to download original voices file: {}", e))?;
+    // Create NPZ file
+    let mut npz_data = Vec::new();
     
-    println!("✅ Combined voices file downloaded to: {}", cache_path.display());
+    // NPZ is a ZIP file with .npy files inside
+    // We'll create it in memory first, then write to disk
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut npz_data));
+    
+    for (i, voice_name) in voice_names.iter().enumerate() {
+        println!("   [{}/{}] Processing voice: {}", i + 1, voice_names.len(), voice_name);
+        
+        // Download the individual voice file
+        let voice_path = download_voice(voice_name).await?;
+        let voice_data = std::fs::read(voice_path)?;
+        
+        // Individual voice files from HF have shape [510, 1, 256]
+        let expected_size = 510 * 1 * 256 * 4; // 4 bytes per f32
+        if voice_data.len() != expected_size {
+            return Err(format!(
+                "Voice file {} has incorrect size: {} bytes (expected {})",
+                voice_name, voice_data.len(), expected_size
+            ).into());
+        }
+        
+        // Convert raw bytes to f32 array
+        let float_data: Vec<f32> = voice_data
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        
+        // Create ndarray with shape [510, 1, 256] but pad to [511, 1, 256] for compatibility
+        let mut padded_data = float_data;
+        // Add one more row of 256 zeros to make it 511 rows
+        padded_data.extend(vec![0.0; 256]);
+        
+        // Create ndarray with shape [511, 1, 256] 
+        let array = Array3::from_shape_vec((511, 1, 256), padded_data)
+            .map_err(|e| format!("Failed to reshape voice data for {}: {}", voice_name, e))?;
+        
+        // Create temporary .npy file
+        let temp_dir = std::env::temp_dir();
+        let temp_npy_path = temp_dir.join(format!("{}.npy", voice_name));
+        ndarray_npy::write_npy(&temp_npy_path, &array)?;
+        
+        // Read the .npy file content
+        let npy_data = std::fs::read(&temp_npy_path)?;
+        std::fs::remove_file(&temp_npy_path)?; // Clean up temp file
+        
+        // Add to ZIP file
+        let zip_filename = format!("{}.npy", voice_name);
+        zip.start_file(&zip_filename, FileOptions::<()>::default())?;
+        zip.write_all(&npy_data)?;
+    }
+    
+    // Finalize the ZIP file
+    zip.finish()?;
+    
+    // Write the NPZ file to disk
+    std::fs::write(&cache_path, npz_data)?;
+    
+    println!("✅ NPZ voices file created at: {}", cache_path.display());
     Ok(cache_path)
 }
 
-/// Create a combined voices file from individual voice files (NPZ format - not implemented yet)
-pub async fn download_and_create_voices_file(_voice_names: Vec<&str>) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    // For now, fallback to downloading the original combined file
-    // TODO: Implement proper NPZ creation from individual HF voice files
-    println!("⚠️  NPZ creation from individual voices not yet implemented.");
-    println!("   Falling back to original combined voices file...");
-    
-    download_original_voices_file().await
-}
-
-/// Download default voices (v1.0 voices)
+/// Download default voices (comprehensive v1.0 voice collection)
 pub async fn download_default_voices() -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     let default_voices = vec![
         // American Female
         "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", 
         "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
-        // American Male
+        // American Male  
         "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", 
         "am_michael", "am_onyx", "am_puck", "am_santa",
         // British Female
         "bf_alice", "bf_emma", "bf_isabella", "bf_lily",
         // British Male
-        "bm_daniel", "bm_fable", "bm_george", "bm_lewis"
+        "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
+        // Spanish
+        "ef_dora", "em_alex", "em_santa",
+        // Portuguese  
+        "pf_dora", "pm_alex", "pm_santa",
+        // French
+        "ff_siwis",
+        // Italian
+        "if_sara", "im_nicola", 
+        // Japanese
+        "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
+        // Chinese
+        "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi", "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
+        // Hindi
+        "hf_alpha", "hf_beta", "hm_omega", "hm_psi"
     ];
     
     download_and_create_voices_file(default_voices).await

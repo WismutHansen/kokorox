@@ -12,11 +12,25 @@ use crate::tts::vocab::VOCAB;
 /// # Returns
 /// A vector of `i64` token indices representing the input text.
 pub fn tokenize(phonemes: &str) -> Vec<i64> {
-    phonemes
-        .chars()
-        .filter_map(|c| VOCAB.get(&c))
-        .map(|&idx| idx as i64)
-        .collect()
+    let mut tokens = Vec::new();
+    let mut dropped_chars = Vec::new();
+    
+    for c in phonemes.chars() {
+        match VOCAB.get(&c) {
+            Some(&idx) => tokens.push(idx as i64),
+            None => {
+                dropped_chars.push(c);
+                // For now, skip unknown characters but log them
+                eprintln!("WARNING: Character '{}' (U+{:04X}) not in vocabulary, skipping", c, c as u32);
+            }
+        }
+    }
+    
+    if !dropped_chars.is_empty() {
+        eprintln!("TOKENIZE: Dropped {} characters from input: {:?}", dropped_chars.len(), dropped_chars);
+    }
+    
+    tokens
 }
 
 #[cfg(test)]

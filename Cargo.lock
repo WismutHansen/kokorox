@@ -1459,6 +1459,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "whatlang",
+ "zip",
 ]
 
 [[package]]
