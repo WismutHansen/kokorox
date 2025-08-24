@@ -517,6 +517,53 @@ impl TTSKoko {
         chunks
     }
 
+    /// Split an IPA phoneme string into chunks without disturbing order or
+    /// breaking inside words/syllables. This avoids splitting on '.' which is
+    /// commonly used as a syllable separator in IPA and caused mid-utterance
+    /// cuts and reordering when reassembled.
+    fn split_phonemes_into_chunks(&self, ipa: &str, max_tokens: usize) -> Vec<String> {
+        // Strategy: accumulate by whitespace-delimited words, measuring tokens
+        // with `tokenize` directly on the phoneme string. This preserves
+        // sequence order and does not split inside a word like "ˈæk.tʃu.əli".
+        let mut chunks = Vec::new();
+        let mut current = String::new();
+
+        // Pre-trim to avoid leading spaces in first chunk
+        let words: Vec<&str> = ipa.split_whitespace().collect();
+
+        for word in words {
+            let test = if current.is_empty() {
+                word.to_string()
+            } else {
+                format!("{} {}", current, word)
+            };
+
+            let t_len = tokenize(&test).len();
+
+            if t_len > max_tokens {
+                if !current.is_empty() {
+                    chunks.push(current);
+                }
+                // If a single word exceeds max_tokens, push it as its own chunk
+                // to avoid infinite loop, though this should be rare with IPA.
+                if tokenize(word).len() > max_tokens {
+                    chunks.push(word.to_string());
+                    current = String::new();
+                } else {
+                    current = word.to_string();
+                }
+            } else {
+                current = test;
+            }
+        }
+
+        if !current.is_empty() {
+            chunks.push(current);
+        }
+
+        chunks
+    }
+
     pub fn tts_raw_audio(
         &self,
         txt: &str,
@@ -528,8 +575,15 @@ impl TTSKoko {
         force_style: bool,
         phonemes: bool,
     ) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
-        // Split text into appropriate chunks
-        let chunks = self.split_text_into_chunks(txt, 500); // Using 500 to leave 12 tokens of margin
+        // Split input into appropriate chunks
+        // In phonemes mode, avoid text-based sentence splitting to preserve
+        // phoneme order and prevent cutting inside syllables.
+        let chunks = if phonemes {
+            println!("PHONEMES MODE: Chunking by words with token budget");
+            self.split_phonemes_into_chunks(txt, 500) // leave ~12 tokens margin
+        } else {
+            self.split_text_into_chunks(txt, 500) // leave ~12 tokens margin
+        };
         let mut final_audio = Vec::new();
 
         // Determine language to use
