@@ -696,21 +696,10 @@ fn utf8_safe_sentence_segmentation(text: &str, language: &str, verbose: bool, de
             println!("Preprocessed: {}", preprocessed);
         }
         
-        // Step 2: Choose the appropriate segmentation function based on language
-        let initial_segments = if language.starts_with("es") || 
-                          language.starts_with("fr") || 
-                          language.starts_with("it") || 
-                          language.starts_with("pt") {
-            // Use the English processor for romance languages (for now)
-            // In the future, we could implement language-specific segmentation
-            sentence_segmentation::processor::english(&preprocessed)
-        } else if language.starts_with("de") {
-            // Use the English processor for German (for now)
-            sentence_segmentation::processor::english(&preprocessed)
-        } else {
-            // Default to English processor
-            sentence_segmentation::processor::english(&preprocessed)
-        };
+        // Step 2: UTF-8 safe segmentation preserving diacritics
+        // Use our internal splitter that operates on Rust chars without
+        // altering non-ASCII characters.
+        let initial_segments = kokorox::tts::segmentation::split_into_sentences(&preprocessed);
         
         // Step 3: Postprocess to fix any remaining issues with incomplete sentences
         let processed = postprocess_sentences(&initial_segments, verbose);
