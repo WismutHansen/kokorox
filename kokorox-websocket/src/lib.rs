@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use futures_util::{SinkExt, StreamExt, stream::SplitSink};
+use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use kokorox::tts::koko::TTSKoko;
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
@@ -11,6 +11,8 @@ struct ClientCommand {
     command: String,
     text: Option<String>,
     voice: Option<String>,
+    language: Option<String>,
+    speed: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -41,6 +43,8 @@ async fn handle_connection(stream: TcpStream, tts: TTSKoko) {
             .first()
             .cloned()
             .unwrap_or_else(|| "af_heart".to_string());
+        let mut current_language = "en-us".to_string();
+        let mut current_speed = 1.0f32;
         let (mut write, mut read) = ws_stream.split();
 
         while let Some(Ok(msg)) = read.next().await {
@@ -59,7 +63,19 @@ async fn handle_connection(stream: TcpStream, tts: TTSKoko) {
                         }
                         "set_voice" => {
                             if let Some(v) = cmd.voice {
-                                if voices.contains(&v) {
+                                let is_valid = if v.contains("+") {
+                                    // Voice mix - validate each voice exists
+                                    v.split('+')
+                                        .all(|part| {
+                                            part.split_once('.')
+                                                .map(|(name, _)| voices.contains(&name.to_string()))
+                                                .unwrap_or(false)
+                                        })
+                                } else {
+                                    voices.contains(&v)
+                                };
+
+                                if is_valid {
                                     current_voice = v.clone();
                                     let reply = SimpleMsg {
                                         msg_type: "voice_changed",
@@ -81,8 +97,36 @@ async fn handle_connection(stream: TcpStream, tts: TTSKoko) {
                                 }
                             }
                         }
+                        "set_language" => {
+                            if let Some(lang) = cmd.language {
+                                current_language = lang.clone();
+                                let reply = SimpleMsg {
+                                    msg_type: "language_changed",
+                                    voice: None,
+                                    voices: None,
+                                };
+                                if let Ok(json) = serde_json::to_string(&reply) {
+                                    let _ = write.send(Message::Text(json)).await;
+                                }
+                            }
+                        }
+                        "set_speed" => {
+                            if let Some(speed) = cmd.speed {
+                                current_speed = speed.clamp(0.1, 3.0);
+                                let reply = SimpleMsg {
+                                    msg_type: "speed_changed",
+                                    voice: None,
+                                    voices: None,
+                                };
+                                if let Ok(json) = serde_json::to_string(&reply) {
+                                    let _ = write.send(Message::Text(json)).await;
+                                }
+                            }
+                        }
                         "synthesize" => {
                             if let Some(text) = cmd.text {
+                                let language = cmd.language.as_deref().unwrap_or(&current_language);
+                                let speed = cmd.speed.unwrap_or(current_speed);
                                 let _ = write
                                     .send(Message::Text(
                                         serde_json::to_string(&SimpleMsg {
@@ -93,10 +137,17 @@ async fn handle_connection(stream: TcpStream, tts: TTSKoko) {
                                         .unwrap(),
                                     ))
                                     .await;
-                                
-                                // Stream audio by processing text in chunks like pipe implementation
-                                let result = synthesize_streaming(&tts, &text, &current_voice, &mut write).await;
-                                
+
+                                let result = synthesize_streaming(
+                                    &tts,
+                                    &text,
+                                    &current_voice,
+                                    language,
+                                    speed,
+                                    &mut write,
+                                )
+                                .await;
+
                                 if result.is_ok() {
                                     let done = SimpleMsg {
                                         msg_type: "synthesis_completed",
@@ -104,9 +155,7 @@ async fn handle_connection(stream: TcpStream, tts: TTSKoko) {
                                         voices: None,
                                     };
                                     let _ = write
-                                        .send(Message::Text(
-                                            serde_json::to_string(&done).unwrap(),
-                                        ))
+                                        .send(Message::Text(serde_json::to_string(&done).unwrap()))
                                         .await;
                                 } else {
                                     let err = SimpleMsg {
@@ -115,9 +164,7 @@ async fn handle_connection(stream: TcpStream, tts: TTSKoko) {
                                         voices: None,
                                     };
                                     let _ = write
-                                        .send(Message::Text(
-                                            serde_json::to_string(&err).unwrap(),
-                                        ))
+                                        .send(Message::Text(serde_json::to_string(&err).unwrap()))
                                         .await;
                                 }
                             }
@@ -153,37 +200,29 @@ async fn synthesize_streaming(
     tts: &TTSKoko,
     text: &str,
     voice: &str,
+    language: &str,
+    speed: f32,
     write: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use kokorox::tts::segmentation::split_into_sentences;
-    
-    // Split text into sentences for streaming
+
     let sentences = split_into_sentences(text);
     let total_chunks = sentences.len();
-    
+
     for (index, sentence) in sentences.iter().enumerate() {
         if sentence.trim().is_empty() {
             continue;
         }
-        
-        // Generate audio for this sentence
-        let audio_opt = match tts.tts_raw_audio(
-            sentence,
-            "en-us",
-            voice,
-            1.0,
-            None,
-            false,
-            true,
-            false,  // phonemes mode not supported for WebSocket API
-        ) {
-            Ok(audio) => Some(audio),
-            Err(_) => {
-                eprintln!("TTS error for sentence '{}'", sentence);
-                None
-            }
-        };
-        
+
+        let audio_opt =
+            match tts.tts_raw_audio(sentence, language, voice, speed, None, false, true, false) {
+                Ok(audio) => Some(audio),
+                Err(_) => {
+                    eprintln!("TTS error for sentence '{}'", sentence);
+                    None
+                }
+            };
+
         if let Some(audio) = audio_opt {
             // Send this chunk immediately
             let encoded = encode_audio(&audio);
@@ -194,40 +233,40 @@ async fn synthesize_streaming(
                 total: total_chunks,
                 sample_rate: 24000,
             };
-            
+
             if let Ok(json) = serde_json::to_string(&chunk) {
                 let _ = write.send(Message::Text(json)).await;
             }
         }
     }
-    
+
     Ok(())
 }
 
 fn encode_audio(samples: &[f32]) -> String {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
-    
+
     // Convert f32 samples to i16 PCM
     let mut pcm_data = Vec::with_capacity(samples.len() * 2);
     for &s in samples {
         let v = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
         pcm_data.extend_from_slice(&v.to_le_bytes());
     }
-    
+
     // Create WAV file with proper header
     let sample_rate = 24000u32;
     let num_channels = 1u16;
     let bits_per_sample = 16u16;
     let byte_rate = sample_rate * num_channels as u32 * bits_per_sample as u32 / 8;
     let block_align = num_channels * bits_per_sample / 8;
-    
+
     let mut wav_data = Vec::with_capacity(44 + pcm_data.len());
-    
+
     // RIFF header
     wav_data.extend_from_slice(b"RIFF");
     wav_data.extend_from_slice(&(36 + pcm_data.len() as u32).to_le_bytes());
     wav_data.extend_from_slice(b"WAVE");
-    
+
     // fmt chunk
     wav_data.extend_from_slice(b"fmt ");
     wav_data.extend_from_slice(&16u32.to_le_bytes()); // chunk size
@@ -237,12 +276,12 @@ fn encode_audio(samples: &[f32]) -> String {
     wav_data.extend_from_slice(&byte_rate.to_le_bytes());
     wav_data.extend_from_slice(&block_align.to_le_bytes());
     wav_data.extend_from_slice(&bits_per_sample.to_le_bytes());
-    
+
     // data chunk
     wav_data.extend_from_slice(b"data");
     wav_data.extend_from_slice(&(pcm_data.len() as u32).to_le_bytes());
     wav_data.extend_from_slice(&pcm_data);
-    
+
     STANDARD.encode(wav_data)
 }
 

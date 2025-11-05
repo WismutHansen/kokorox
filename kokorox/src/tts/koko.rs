@@ -1,4 +1,5 @@
-use crate::tts::phonemizer::{detect_language, get_default_voice_for_language};
+use crate::tts::phonemizer::{detect_language, get_default_voice_for_language, normalize_language_code};
+use crate::tts::phonemizer::japanese_text_to_phonemes;
 use crate::tts::tokenize::tokenize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -604,6 +605,12 @@ impl TTSKoko {
             lan.to_string()
         };
 
+        // Normalize the language code to espeak-ng format
+        let language = normalize_language_code(&language).unwrap_or_else(|| {
+            eprintln!("Warning: Unsupported language '{}', falling back to en-us", language);
+            "en-us".to_string()
+        });
+
         // Determine if we're using custom voices
         let is_custom = self.is_using_custom_voices(&self.voices_path);
         
@@ -663,11 +670,30 @@ impl TTSKoko {
                 println!("Manual language mode: {} - User force-style: {}", language, style_name);
             }
             
-            // Check if the forced style exists
-            if !self.styles.contains_key(style_name) {
+            // Check if the forced style exists (or if it's a valid mix)
+            if style_name.contains("+") {
+                // Voice mixing - validate each voice exists
+                let mut all_valid = true;
+                for style_part in style_name.split('+') {
+                    if let Some((name, _)) = style_part.split_once('.') {
+                        if !self.styles.contains_key(name) {
+                            println!("WARNING: Voice '{}' in mix not found in available voices", name);
+                            all_valid = false;
+                        }
+                    }
+                }
+                
+                if !all_valid {
+                    println!("Available voices: {:?}", self.styles.keys().collect::<Vec<_>>());
+                    let fallback_style = self.styles.keys().next().unwrap().to_string();
+                    println!("Falling back to first available voice: {}", fallback_style);
+                    fallback_style
+                } else {
+                    style_name.to_string()
+                }
+            } else if !self.styles.contains_key(style_name) {
                 println!("WARNING: Forced style '{}' not found in available voices", style_name);
                 println!("Available voices: {:?}", self.styles.keys().collect::<Vec<_>>());
-                // Provide a fallback that we know exists - first voice in the list
                 let fallback_style = self.styles.keys().next().unwrap().to_string();
                 println!("Falling back to first available voice: {}", fallback_style);
                 fallback_style
@@ -803,8 +829,25 @@ impl TTSKoko {
                 // When --phonemes flag is used, treat input as IPA phonemes directly
                 println!("PHONEMES MODE: Using input as IPA phonemes directly: {}", chunk);
                 chunk.to_string()
+            } else if language == "ja" {
+                // Use jpreprocess for Japanese to properly handle kanji and particles
+                println!("CALLING JPREPROCESS ON: {}", processed_chunk);
+                let phonemes = japanese_text_to_phonemes(&processed_chunk)
+                    .map_err(|e| {
+                        println!("JPREPROCESS ERROR: {}", e);
+                        // Fall back to espeak on error
+                        eprintln!("Falling back to eSpeak-ng for Japanese");
+                        let fallback = text_to_phonemes(&processed_chunk, &language, None, true, false)
+                            .map(|p| p.join(""))
+                            .unwrap_or_default();
+                        fallback
+                    })
+                    .unwrap_or_else(|_| String::new());
+                    
+                println!("JPREPROCESS RESULT: {}", phonemes);
+                phonemes
             } else {
-                // This is where the phonemization happens - a potential point of accent loss
+                // This is where the phonemization happens for non-Japanese languages
                 println!("CALLING PHONEMIZE ON: {}", processed_chunk);
                 let mut phonemes = text_to_phonemes(&processed_chunk, &language, None, true, false)
                     .map_err(|e| {
@@ -941,19 +984,26 @@ impl TTSKoko {
             for style in styles {
                 if let Some((name, portion)) = style.split_once('.') {
                     if let Ok(portion) = portion.parse::<f32>() {
+                        if !self.styles.contains_key(name) {
+                            return Err(format!("Voice '{}' not found in available voices", name).into());
+                        }
                         style_names.push(name);
                         style_portions.push(portion * 0.1);
                     }
                 }
             }
+            
+            if style_names.is_empty() {
+                return Err(format!("Invalid voice mix format '{}'. Use format: voice1.weight+voice2.weight (e.g., jf_alpha.4+am_echo.6)", style_name).into());
+            }
+            
             eprintln!("styles: {:?}, portions: {:?}", style_names, style_portions);
 
             let mut blended_style = vec![vec![0.0; 256]; 1];
 
             for (name, portion) in style_names.iter().zip(style_portions.iter()) {
                 if let Some(style) = self.styles.get(*name) {
-                    let style_slice = &style[tokens_len][0]; // This is a [256] array
-                                                             // Blend into the blended_style
+                    let style_slice = &style[tokens_len][0];
                     for j in 0..256 {
                         blended_style[0][j] += style_slice[j] * portion;
                     }

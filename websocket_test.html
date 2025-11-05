@@ -306,6 +306,14 @@
         </div>
 
         <div class="form-group">
+            <label for="voiceMixInput">Custom Voice Mix (optional):</label>
+            <input type="text" id="voiceMixInput" placeholder="e.g., af_sarah.5+af_nicole.5" disabled>
+            <small style="color: #666; display: block; margin-top: 5px;">
+                💡 Format: voice1.weight+voice2.weight (weight: 0-10, e.g., .5 = 50%)
+            </small>
+        </div>
+
+        <div class="form-group">
             <label for="textInput">Text to Synthesize:</label>
             <textarea id="textInput" placeholder="Enter text to convert to speech..." disabled>Hello world! This is a test of the Kokorox text-to-speech system.</textarea>
         </div>
@@ -355,6 +363,7 @@
                     disconnectBtn: document.getElementById('disconnectBtn'),
                     listVoicesBtn: document.getElementById('listVoicesBtn'),
                     voiceSelect: document.getElementById('voiceSelect'),
+                    voiceMixInput: document.getElementById('voiceMixInput'),
                     textInput: document.getElementById('textInput'),
                     synthesizeBtn: document.getElementById('synthesizeBtn'),
                     clearLogsBtn: document.getElementById('clearLogsBtn'),
@@ -372,6 +381,7 @@
                 this.elements.synthesizeBtn.addEventListener('click', () => this.synthesize());
                 this.elements.clearLogsBtn.addEventListener('click', () => this.clearLogs());
                 this.elements.voiceSelect.addEventListener('change', () => this.setVoice());
+                this.elements.voiceMixInput.addEventListener('input', () => this.setVoice());
                 this.elements.volumeSlider.addEventListener('input', (e) => {
                     this.elements.audioPlayer.volume = e.target.value;
                 });
@@ -404,8 +414,11 @@
                 this.elements.disconnectBtn.disabled = !this.isConnected;
                 this.elements.listVoicesBtn.disabled = !this.isConnected;
                 this.elements.voiceSelect.disabled = !this.isConnected;
+                this.elements.voiceMixInput.disabled = !this.isConnected;
                 this.elements.textInput.disabled = !this.isConnected;
-                this.elements.synthesizeBtn.disabled = !this.isConnected || !this.elements.voiceSelect.value;
+                
+                const hasVoice = this.elements.voiceSelect.value || this.elements.voiceMixInput.value.trim();
+                this.elements.synthesizeBtn.disabled = !this.isConnected || !hasVoice;
             }
 
             connect() {
@@ -476,7 +489,10 @@
             }
 
             setVoice() {
-                const voice = this.elements.voiceSelect.value;
+                // Prioritize custom voice mix input over dropdown
+                const voiceMix = this.elements.voiceMixInput.value.trim();
+                const voice = voiceMix || this.elements.voiceSelect.value;
+                
                 if (voice) {
                     this.sendMessage({ command: 'set_voice', voice: voice });
                 }

@@ -3,16 +3,20 @@ use kokorox::{
     tts::koko::{TTSKoko, TTSOpts},
     utils::wav::{write_audio_chunk, WavHeader},
 };
+use regex::Regex;
 use rodio::{OutputStream, Sink, Source};
-use std::{io, net::{IpAddr, SocketAddr}, path::Path};
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use std::{
     fs::{self},
     io::Write,
 };
+use std::{
+    io,
+    net::{IpAddr, SocketAddr},
+    path::Path,
+};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use regex::Regex;
 
 struct ChannelSource {
     rx: Receiver<Vec<f32>>,
@@ -141,18 +145,18 @@ enum Mode {
         #[arg(long, default_value_t = 3000)]
         port: u16,
     },
-    
+
     /// List all available voice styles
     #[command(name = "voices", alias = "v", long_flag_aliases = ["voices"])]
     Voices {
         /// Output format: table (default), json, or list
         #[arg(long, default_value = "table")]
         format: String,
-        
+
         /// Filter voices by language (e.g., en, es, zh, ja)
         #[arg(long)]
         language: Option<String>,
-        
+
         /// Filter voices by gender (male, female)
         #[arg(long)]
         gender: Option<String>,
@@ -174,7 +178,7 @@ struct Cli {
         default_value = "en-us"
     )]
     lan: String,
-    
+
     /// Auto-detect language from input text
     /// When enabled, the system will attempt to detect the language from the input text
     #[arg(
@@ -184,8 +188,8 @@ struct Cli {
         default_value_t = false
     )]
     auto_detect: bool,
-    
-    /// Override style selection 
+
+    /// Override style selection
     /// When enabled, this will use the specified style (set with -s/--style)
     /// instead of automatically selecting a language-appropriate style.
     /// Without this flag, the system tries to use language-appropriate voices.
@@ -197,27 +201,16 @@ struct Cli {
     force_style: bool,
 
     /// Path to the Kokoro v1.0 ONNX model on the filesystem (optional, defaults to HF cache)
-    #[arg(
-        short = 'm',
-        long = "model",
-        value_name = "MODEL_PATH"
-    )]
+    #[arg(short = 'm', long = "model", value_name = "MODEL_PATH")]
     model_path: Option<String>,
 
     /// Path to the voices data file on the filesystem (optional, defaults to HF cache)
-    #[arg(
-        short = 'd',
-        long = "data",
-        value_name = "DATA_PATH"
-    )]
+    #[arg(short = 'd', long = "data", value_name = "DATA_PATH")]
     data_path: Option<String>,
 
     /// Model type to download from Hugging Face (fp16, q4, q4f16, q8f16, quantized, uint8, uint8f16)
     /// Only used when model path is not specified
-    #[arg(
-        long = "model-type",
-        value_name = "MODEL_TYPE"
-    )]
+    #[arg(long = "model-type", value_name = "MODEL_TYPE")]
     model_type: Option<String>,
 
     /// Silent Mode: If set to true, don't play audio when using Pipe  
@@ -225,7 +218,7 @@ struct Cli {
         short = 'x',
         long = "silent",
         value_name = "SILENT",
-        default_value_t = false 
+        default_value_t = false
     )]
     silent: bool,
 
@@ -236,12 +229,13 @@ struct Cli {
     /// For English: af_* (US female), am_* (US male), bf_* (UK female), bm_* (UK male)
     /// For Japanese: jf_* (female) or jm_* (male)
     /// For Chinese: zf_* (female) or zm_* (male)
+    ///
+    /// To blend voices, use format: voice1.weight+voice2.weight
+    /// where weight is an integer 0-10 (e.g., af_sarah.4+af_nicole.6 = 40% + 60%)
     #[arg(
         short = 's',
         long = "style",
         value_name = "STYLE",
-        // if users use `af_sarah.4+af_nicole.6` as style name
-        // then we blend it, with 0.4*af_sarah + 0.6*af_nicole
         default_value = "af_heart"
     )]
     style: String,
@@ -264,7 +258,7 @@ struct Cli {
     /// Initial silence duration in tokens
     #[arg(long = "initial-silence", value_name = "INITIAL_SILENCE")]
     initial_silence: Option<usize>,
-    
+
     /// Enable verbose debug output for text processing
     /// Especially useful for debugging issues with non-English text
     #[arg(
@@ -274,7 +268,7 @@ struct Cli {
         default_value_t = false
     )]
     verbose: bool,
-    
+
     /// Enable detailed accent debugging for non-English languages
     /// Shows character-by-character analysis of accented characters
     #[arg(
@@ -301,13 +295,13 @@ struct Cli {
 /// Especially important for year ranges like "1939 to" that shouldn't be split
 fn preprocess_text_for_segmentation(text: &str, verbose: bool) -> String {
     let mut processed = text.to_string();
-    
+
     // 1. Handle problematic year patterns that might cause improper segmentation
     // Example: "from 1939 to" should not be split after "1939"
     if verbose {
         println!("PREPROCESS: Checking for year ranges that might cause improper segmentation");
     }
-    
+
     // Look for patterns like "YYYY to" where YYYY is a year
     let year_range_re = Regex::new(r"(\b(19|20)\d{2})\s+to\b").unwrap();
     if year_range_re.is_match(&processed) {
@@ -316,9 +310,11 @@ fn preprocess_text_for_segmentation(text: &str, verbose: bool) -> String {
         }
         // Insert a non-breaking marker to prevent split after the year
         // Use a space instead of directly connecting them to prevent "1939to" becoming "one939to"
-        processed = year_range_re.replace_all(&processed, "${1} →to").to_string();
+        processed = year_range_re
+            .replace_all(&processed, "${1} →to")
+            .to_string();
     }
-    
+
     // Also look for already connected "YYYYto" patterns (without space)
     // This can happen in poorly formatted text
     let connected_year_re = Regex::new(r"(\b(19|20)\d{2})to\b").unwrap();
@@ -327,50 +323,62 @@ fn preprocess_text_for_segmentation(text: &str, verbose: bool) -> String {
             println!("PREPROCESS: Found connected year pattern (YYYYto)");
         }
         // Insert a space between year and 'to' to ensure proper processing
-        processed = connected_year_re.replace_all(&processed, "${1} →to").to_string();
+        processed = connected_year_re
+            .replace_all(&processed, "${1} →to")
+            .to_string();
     }
-    
-    // Look for variants like "from YYYY until" 
+
+    // Look for variants like "from YYYY until"
     let from_year_re = Regex::new(r"from\s+(\b(19|20)\d{2})\s+(until|to|through)\b").unwrap();
     if from_year_re.is_match(&processed) {
         if verbose {
             println!("PREPROCESS: Found 'from YYYY to/until/through' pattern");
         }
         // Insert a non-breaking marker with space to prevent number concatenation
-        processed = from_year_re.replace_all(&processed, "from ${1}→${3}").to_string();
-        
+        processed = from_year_re
+            .replace_all(&processed, "from ${1}→${3}")
+            .to_string();
+
         // Special handling for specific known problematic years
         for year in ["1939", "1940", "1941", "1942", "1945"] {
             let pattern = format!("from {} to", year);
             if processed.contains(&pattern) {
                 if verbose {
-                    println!("PREPROCESS: Special handling for war year range '{}'", pattern);
+                    println!(
+                        "PREPROCESS: Special handling for war year range '{}'",
+                        pattern
+                    );
                 }
                 // Create a stronger binding for these specific patterns
                 processed = processed.replace(&pattern, &format!("from {}→to", year));
             }
         }
     }
-    
+
     // Handle "between YYYY and YYYY" patterns
-    let between_years_re = Regex::new(r"between\s+(\b(19|20)\d{2})\s+and\s+(\b(19|20)\d{2})\b").unwrap();
+    let between_years_re =
+        Regex::new(r"between\s+(\b(19|20)\d{2})\s+and\s+(\b(19|20)\d{2})\b").unwrap();
     if between_years_re.is_match(&processed) {
         if verbose {
             println!("PREPROCESS: Found 'between YYYY and YYYY' pattern");
         }
         // Prevent splits within the range expression with spaces to prevent number concatenation
-        processed = between_years_re.replace_all(&processed, "between ${1} →and→ ${3}").to_string();
+        processed = between_years_re
+            .replace_all(&processed, "between ${1} →and→ ${3}")
+            .to_string();
     }
-    
+
     // 2. Handle cases where a year is followed by a preposition that might introduce an incomplete thought
     let year_prep_re = Regex::new(r"(\b(19|20)\d{2})\s+(in|at|on|by|with)\b").unwrap();
     if year_prep_re.is_match(&processed) {
         if verbose {
             println!("PREPROCESS: Found 'YYYY in/at/on/by/with' pattern");
         }
-        processed = year_prep_re.replace_all(&processed, "${1} →${3}").to_string();
+        processed = year_prep_re
+            .replace_all(&processed, "${1} →${3}")
+            .to_string();
     }
-    
+
     // 3. Handle other common sentence fragments that shouldn't be split
     let common_fragments = [
         (r"(?i)such as\s+", "such→as "),
@@ -380,7 +388,7 @@ fn preprocess_text_for_segmentation(text: &str, verbose: bool) -> String {
         (r"(?i)up to\s+", "up→to "),
         (r"(?i)in order to\s+", "in→order→to "),
     ];
-    
+
     for (pattern, replacement) in common_fragments.iter() {
         let re = Regex::new(pattern).unwrap();
         if re.is_match(&processed) && verbose {
@@ -388,7 +396,7 @@ fn preprocess_text_for_segmentation(text: &str, verbose: bool) -> String {
         }
         processed = re.replace_all(&processed, *replacement).to_string();
     }
-    
+
     processed
 }
 
@@ -397,67 +405,83 @@ fn preprocess_text_for_segmentation(text: &str, verbose: bool) -> String {
 fn postprocess_sentences(sentences: &[String], verbose: bool) -> Vec<String> {
     let mut result = Vec::new();
     let mut i = 0;
-    
+
     while i < sentences.len() {
         let mut current = sentences[i].clone();
-        
+
         // 1. Restore any special markers we added during preprocessing
         current = current.replace("→", " ");
-        
+
         // 2. Check if this sentence ends with a year followed by "to" in the next sentence
         if i < sentences.len() - 1 {
-            let next = &sentences[i+1];
-            
+            let next = &sentences[i + 1];
+
             // Pattern: current ends with a year + next starts with "to/until/through"
-            let ends_with_year = Regex::new(r"\b(19|20)\d{2}\s*$").unwrap().is_match(&current);
-            let starts_with_connector = next.trim().starts_with("to") || 
-                                       next.trim().starts_with("To") ||
-                                       next.trim().starts_with("until") || 
-                                       next.trim().starts_with("Until") ||
-                                       next.trim().starts_with("through") ||
-                                       next.trim().starts_with("Through");
-            
+            let ends_with_year = Regex::new(r"\b(19|20)\d{2}\s*$")
+                .unwrap()
+                .is_match(&current);
+            let starts_with_connector = next.trim().starts_with("to")
+                || next.trim().starts_with("To")
+                || next.trim().starts_with("until")
+                || next.trim().starts_with("Until")
+                || next.trim().starts_with("through")
+                || next.trim().starts_with("Through");
+
             // Special case for "1939 to It" problem
             let starts_with_it = next.trim().starts_with("It") || next.trim().starts_with("it");
-            
+
             if ends_with_year && (starts_with_connector || starts_with_it) {
                 if verbose {
-                    println!("POSTPROCESS: Combining year + connector: '{}' + '{}'", current, next);
+                    println!(
+                        "POSTPROCESS: Combining year + connector: '{}' + '{}'",
+                        current, next
+                    );
                 }
                 // Combine the sentences
                 current = format!("{} {}", current, next);
                 // Skip the next sentence since we've combined it
                 i += 1;
             }
-            
+
             // Also check for specific problem patterns that seem common in the real-world examples
-            if current.ends_with("1939") || current.ends_with("1939 ") ||
-               current.ends_with("1940") || current.ends_with("1940 ") ||
-               current.ends_with("1941") || current.ends_with("1941 ") ||
-               current.ends_with("1942") || current.ends_with("1942 ") ||
-               current.ends_with("1945") || current.ends_with("1945 ") {
-               
+            if current.ends_with("1939")
+                || current.ends_with("1939 ")
+                || current.ends_with("1940")
+                || current.ends_with("1940 ")
+                || current.ends_with("1941")
+                || current.ends_with("1941 ")
+                || current.ends_with("1942")
+                || current.ends_with("1942 ")
+                || current.ends_with("1945")
+                || current.ends_with("1945 ")
+            {
                 if verbose {
-                    println!("POSTPROCESS: Special handling for sentence ending with war year: {}", current);
+                    println!(
+                        "POSTPROCESS: Special handling for sentence ending with war year: {}",
+                        current
+                    );
                 }
-                
+
                 // Almost always, this should be combined with the next sentence
                 current = format!("{} {}", current, next);
                 i += 1;
             }
-            
+
             // Also check for other incomplete sentence patterns
-            let ends_with_preposition = current.trim().ends_with("in") || 
-                                      current.trim().ends_with("on") || 
-                                      current.trim().ends_with("at") || 
-                                      current.trim().ends_with("by") || 
-                                      current.trim().ends_with("with") || 
-                                      current.trim().ends_with("for") ||
-                                      current.trim().ends_with("from");
-            
+            let ends_with_preposition = current.trim().ends_with("in")
+                || current.trim().ends_with("on")
+                || current.trim().ends_with("at")
+                || current.trim().ends_with("by")
+                || current.trim().ends_with("with")
+                || current.trim().ends_with("for")
+                || current.trim().ends_with("from");
+
             if ends_with_preposition && !next.trim().is_empty() {
                 if verbose {
-                    println!("POSTPROCESS: Combining sentence ending with preposition: '{}' + '{}'", current, next);
+                    println!(
+                        "POSTPROCESS: Combining sentence ending with preposition: '{}' + '{}'",
+                        current, next
+                    );
                 }
                 // Combine the sentences
                 current = format!("{} {}", current, next);
@@ -465,9 +489,9 @@ fn postprocess_sentences(sentences: &[String], verbose: bool) -> Vec<String> {
                 i += 1;
             }
         }
-        
+
         // 3. Fix specific patterns that indicate bad sentence breaks
-        // Even after combining, handle cases like "1939 to It officially" 
+        // Even after combining, handle cases like "1939 to It officially"
         if current.contains(" to It ") || current.contains(" to it ") {
             if verbose {
                 println!("POSTPROCESS: Fixing 'to It/it' pattern in: {}", current);
@@ -475,22 +499,27 @@ fn postprocess_sentences(sentences: &[String], verbose: bool) -> Vec<String> {
             // Force lowercase to prevent sentence break detection in future processing
             current = current.replace(" to It ", " to it ");
         }
-        
+
         // Add the processed sentence to our result
         if !current.trim().is_empty() {
             result.push(current);
         }
-        
+
         i += 1;
     }
-    
+
     result
 }
 
 /// Display available voices in various formats
-fn display_voices(tts: &TTSKoko, format: &str, language_filter: Option<&str>, gender_filter: Option<&str>) {
+fn display_voices(
+    tts: &TTSKoko,
+    format: &str,
+    language_filter: Option<&str>,
+    gender_filter: Option<&str>,
+) {
     let voice_ids = tts.get_available_voices();
-    
+
     // Parse and filter voices
     let mut voices: Vec<(String, String, String, String, String)> = voice_ids
         .into_iter()
@@ -501,28 +530,34 @@ fn display_voices(tts: &TTSKoko, format: &str, language_filter: Option<&str>, ge
         .filter(|(_, _, _, language, gender)| {
             // Apply language filter
             if let Some(lang_filter) = language_filter {
-                if !language.to_lowercase().contains(&lang_filter.to_lowercase()) &&
-                   !get_language_code(language).contains(&lang_filter.to_lowercase()) {
+                if !language
+                    .to_lowercase()
+                    .contains(&lang_filter.to_lowercase())
+                    && !get_language_code(language).contains(&lang_filter.to_lowercase())
+                {
                     return false;
                 }
             }
-            
+
             // Apply gender filter
             if let Some(gender_filter) = gender_filter {
-                if !gender.to_lowercase().contains(&gender_filter.to_lowercase()) {
+                if !gender
+                    .to_lowercase()
+                    .contains(&gender_filter.to_lowercase())
+                {
                     return false;
                 }
             }
-            
+
             true
         })
         .collect();
 
     // Sort voices
     voices.sort_by(|a, b| {
-        a.3.cmp(&b.3)  // language
-            .then(a.4.cmp(&b.4))  // gender
-            .then(a.1.cmp(&b.1))  // name
+        a.3.cmp(&b.3) // language
+            .then(a.4.cmp(&b.4)) // gender
+            .then(a.1.cmp(&b.1)) // name
     });
 
     match format {
@@ -539,42 +574,70 @@ fn display_voices(tts: &TTSKoko, format: &str, language_filter: Option<&str>, ge
                 println!("  }}{}", comma);
             }
             println!("]");
-        },
+        }
         "list" => {
             for (id, _, _, _, _) in voices {
                 println!("{}", id);
             }
-        },
+        }
         "table" | _ => {
             // Calculate column widths
-            let id_width = voices.iter().map(|(id, _, _, _, _)| id.len()).max().unwrap_or(10).max(10);
-            let name_width = voices.iter().map(|(_, name, _, _, _)| name.len()).max().unwrap_or(15).max(15);
-            let lang_width = voices.iter().map(|(_, _, _, lang, _)| lang.len()).max().unwrap_or(12).max(12);
+            let id_width = voices
+                .iter()
+                .map(|(id, _, _, _, _)| id.len())
+                .max()
+                .unwrap_or(10)
+                .max(10);
+            let name_width = voices
+                .iter()
+                .map(|(_, name, _, _, _)| name.len())
+                .max()
+                .unwrap_or(15)
+                .max(15);
+            let lang_width = voices
+                .iter()
+                .map(|(_, _, _, lang, _)| lang.len())
+                .max()
+                .unwrap_or(12)
+                .max(12);
             let gender_width = 8; // "Female" is 6 chars, so 8 is enough
-            
+
             // Print header
-            println!("{:<width_id$} {:<width_name$} {:<width_lang$} {:<width_gender$} Description", 
-                     "Voice ID", "Name", "Language", "Gender",
-                     width_id = id_width,
-                     width_name = name_width, 
-                     width_lang = lang_width,
-                     width_gender = gender_width);
-            
-            println!("{} {} {} {} {}",
-                     "-".repeat(id_width),
-                     "-".repeat(name_width),
-                     "-".repeat(lang_width), 
-                     "-".repeat(gender_width),
-                     "-".repeat(20));
-            
+            println!(
+                "{:<width_id$} {:<width_name$} {:<width_lang$} {:<width_gender$} Description",
+                "Voice ID",
+                "Name",
+                "Language",
+                "Gender",
+                width_id = id_width,
+                width_name = name_width,
+                width_lang = lang_width,
+                width_gender = gender_width
+            );
+
+            println!(
+                "{} {} {} {} {}",
+                "-".repeat(id_width),
+                "-".repeat(name_width),
+                "-".repeat(lang_width),
+                "-".repeat(gender_width),
+                "-".repeat(20)
+            );
+
             // Print voices
             for (id, name, description, language, gender) in voices {
-                println!("{:<width_id$} {:<width_name$} {:<width_lang$} {:<width_gender$} {}", 
-                         id, name, language, gender, description,
-                         width_id = id_width,
-                         width_name = name_width,
-                         width_lang = lang_width,
-                         width_gender = gender_width);
+                println!(
+                    "{:<width_id$} {:<width_name$} {:<width_lang$} {:<width_gender$} {}",
+                    id,
+                    name,
+                    language,
+                    gender,
+                    description,
+                    width_id = id_width,
+                    width_name = name_width,
+                    width_lang = lang_width,
+                    width_gender = gender_width
+                );
             }
         }
     }
@@ -591,25 +654,25 @@ fn parse_voice_info_cli(voice_id: &str) -> (String, String, String, String) {
             "unknown".to_string(),
         );
     }
-    
+
     let prefix = parts[0];
     let name = parts[1..].join("_");
-    
+
     let (language_code, gender) = if prefix.len() >= 2 {
-        let lang_part = &prefix[..prefix.len()-1];
-        let gender_part = &prefix[prefix.len()-1..];
-        
+        let lang_part = &prefix[..prefix.len() - 1];
+        let gender_part = &prefix[prefix.len() - 1..];
+
         let gender = match gender_part {
             "f" => "Female",
-            "m" => "Male", 
+            "m" => "Male",
             _ => "Unknown",
         };
-        
+
         (lang_part, gender)
     } else {
         (prefix, "Unknown")
     };
-    
+
     let language = match language_code {
         "a" => "English (US)",
         "b" => "English (UK)",
@@ -625,11 +688,22 @@ fn parse_voice_info_cli(voice_id: &str) -> (String, String, String, String) {
         "h" => "Hindi",
         _ => "Unknown",
     };
-    
-    let display_name = name.chars().next().unwrap_or('a').to_uppercase().to_string() + &name[1..];
+
+    let display_name = name
+        .chars()
+        .next()
+        .unwrap_or('a')
+        .to_uppercase()
+        .to_string()
+        + &name[1..];
     let description = format!("{} {} voice", language, gender.to_lowercase());
-    
-    (display_name, description, language.to_string(), gender.to_string())
+
+    (
+        display_name,
+        description,
+        language.to_string(),
+        gender.to_string(),
+    )
 }
 
 /// Get language code for filtering
@@ -654,80 +728,105 @@ fn get_language_code(language: &str) -> String {
 /// Custom sentence segmentation function that preserves UTF-8 characters
 /// This is a replacement for the sentence_segmentation library to fix the
 /// loss of accented characters during processing and preserve apostrophes.
-fn utf8_safe_sentence_segmentation(text: &str, language: &str, verbose: bool, debug_accents: bool) -> Vec<String> {
+fn utf8_safe_sentence_segmentation(
+    text: &str,
+    language: &str,
+    verbose: bool,
+    debug_accents: bool,
+) -> Vec<String> {
     // Only log when debug flags are enabled
     if verbose || debug_accents {
         // Log debug info for text with special characters
-        let has_accents = text.contains('á') || text.contains('é') || 
-                         text.contains('í') || text.contains('ó') || 
-                         text.contains('ú') || text.contains('ñ') || 
-                         text.contains('ü') ||
-                         text.contains('à') || text.contains('è') || 
-                         text.contains('ì') || text.contains('ò') || 
-                         text.contains('ù') || text.contains('ë') || 
-                         text.contains('ï') || text.contains('ç');
+        let has_accents = text.contains('á')
+            || text.contains('é')
+            || text.contains('í')
+            || text.contains('ó')
+            || text.contains('ú')
+            || text.contains('ñ')
+            || text.contains('ü')
+            || text.contains('à')
+            || text.contains('è')
+            || text.contains('ì')
+            || text.contains('ò')
+            || text.contains('ù')
+            || text.contains('ë')
+            || text.contains('ï')
+            || text.contains('ç');
         if has_accents {
             if verbose {
                 println!("UTF8-SAFE SEGMENTATION: Text with accents detected");
             }
-            
+
             // If the detailed accent debugging is enabled, show each character
             if debug_accents {
                 for (i, c) in text.char_indices() {
                     if !c.is_ascii() {
-                        println!("  Special char at {}: '{}' (Unicode: U+{:04X})", i, c, c as u32);
+                        println!(
+                            "  Special char at {}: '{}' (Unicode: U+{:04X})",
+                            i, c, c as u32
+                        );
                     }
                 }
             }
         }
     }
-    
-    // IMPORTANT: The key issue with sentence segmentation is that it needs to correctly 
+
+    // IMPORTANT: The key issue with sentence segmentation is that it needs to correctly
     // handle multi-byte UTF-8 characters. We need to carefully track strings through this process.
-    
+
     // First, ensure the text is valid UTF-8 (it should be since it's a Rust &str)
     if !text.is_empty() {
         // Step 1: Preprocess text to handle problematic cases like year ranges
         let preprocessed = preprocess_text_for_segmentation(text, verbose);
-        
+
         if verbose && preprocessed != text {
             println!("PREPROCESSING APPLIED: Text transformed for better segmentation");
             println!("Original: {}", text);
             println!("Preprocessed: {}", preprocessed);
         }
-        
+
         // Step 2: UTF-8 safe segmentation preserving diacritics
         // Use our internal splitter that operates on Rust chars without
         // altering non-ASCII characters.
         let initial_segments = kokorox::tts::segmentation::split_into_sentences(&preprocessed);
-        
+
         // Step 3: Postprocess to fix any remaining issues with incomplete sentences
         let processed = postprocess_sentences(&initial_segments, verbose);
-        
+
         if verbose && processed.len() != initial_segments.len() {
-            println!("POSTPROCESSING APPLIED: Combined {} initial segments into {} final segments", 
-                    initial_segments.len(), processed.len());
+            println!(
+                "POSTPROCESSING APPLIED: Combined {} initial segments into {} final segments",
+                initial_segments.len(),
+                processed.len()
+            );
         }
-        
+
         // Verify if the output retains accented characters, if debugging is enabled
         if verbose || debug_accents {
             // Check for languages that commonly use accents
-            let check_accents = language.starts_with("es") || 
-                               language.starts_with("fr") || 
-                               language.starts_with("pt") || 
-                               language.starts_with("it");
-                               
+            let check_accents = language.starts_with("es")
+                || language.starts_with("fr")
+                || language.starts_with("pt")
+                || language.starts_with("it");
+
             if check_accents {
                 for (i, sentence) in processed.iter().enumerate() {
-                    let has_accents = sentence.contains('á') || sentence.contains('é') || 
-                                     sentence.contains('í') || sentence.contains('ó') || 
-                                     sentence.contains('ú') || sentence.contains('ñ') || 
-                                     sentence.contains('ü') ||
-                                     sentence.contains('à') || sentence.contains('è') || 
-                                     sentence.contains('ì') || sentence.contains('ò') || 
-                                     sentence.contains('ù') || sentence.contains('ë') || 
-                                     sentence.contains('ï') || sentence.contains('ç');
-                                     
+                    let has_accents = sentence.contains('á')
+                        || sentence.contains('é')
+                        || sentence.contains('í')
+                        || sentence.contains('ó')
+                        || sentence.contains('ú')
+                        || sentence.contains('ñ')
+                        || sentence.contains('ü')
+                        || sentence.contains('à')
+                        || sentence.contains('è')
+                        || sentence.contains('ì')
+                        || sentence.contains('ò')
+                        || sentence.contains('ù')
+                        || sentence.contains('ë')
+                        || sentence.contains('ï')
+                        || sentence.contains('ç');
+
                     if has_accents {
                         if debug_accents {
                             println!("SEGMENT {}: Retained accents: {}", i, sentence);
@@ -735,14 +834,13 @@ fn utf8_safe_sentence_segmentation(text: &str, language: &str, verbose: bool, de
                     } else if verbose {
                         // Try to identify potential accent loss by looking for common words
                         // that should have accents but don't
-                        let potential_issues = language.starts_with("es") && (
-                            sentence.contains("politica") || 
-                            sentence.contains("aqu") || 
-                            sentence.contains("economia") || 
-                            sentence.contains("informacion") ||
-                            sentence.contains("comunicacion")
-                        );
-                        
+                        let potential_issues = language.starts_with("es")
+                            && (sentence.contains("politica")
+                                || sentence.contains("aqu")
+                                || sentence.contains("economia")
+                                || sentence.contains("informacion")
+                                || sentence.contains("comunicacion"));
+
                         if potential_issues {
                             println!("POTENTIAL ACCENT LOSS in segment {}: {}", i, sentence);
                         }
@@ -750,7 +848,7 @@ fn utf8_safe_sentence_segmentation(text: &str, language: &str, verbose: bool, de
                 }
             }
         }
-        
+
         processed
     } else {
         vec![]
@@ -768,20 +866,21 @@ fn ensure_parent_dir_exists(file_path: &str) -> io::Result<()> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The segmentation fault seems to be related to ONNX runtime cleanup
     // We'll use a different approach to clean up
-    
+
     // Tell Rust to just abort on panic instead of unwinding
-    // This avoids complex cleanup issues with ONNX Runtime 
+    // This avoids complex cleanup issues with ONNX Runtime
     std::panic::set_hook(Box::new(|panic_info| {
         eprintln!("Application panic: {}", panic_info);
         std::process::abort();
     }));
-    
+
     // Set up SIGTERM/SIGINT handlers for immediate exit
     ctrlc::set_handler(move || {
         println!("Received termination signal, exiting immediately.");
         std::process::exit(0); // Exit immediately on Ctrl+C
-    }).expect("Error setting Ctrl-C handler");
-    
+    })
+    .expect("Error setting Ctrl-C handler");
+
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         let mut cli = Cli::parse();

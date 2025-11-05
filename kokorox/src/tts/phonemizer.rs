@@ -4,11 +4,14 @@ use espeak_rs::text_to_phonemes;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 lazy_static! {
     static ref PHONEME_PATTERNS: Regex = Regex::new(r"(?<=[a-zɹː])(?=hˈʌndɹɪd)").unwrap();
     static ref Z_PATTERN: Regex = Regex::new(r#" z(?=[;:,.!?¡¿—…"«»"" ]|$)"#).unwrap();
     static ref NINETY_PATTERN: Regex = Regex::new(r"(?<=nˈaɪn)ti(?!ː)").unwrap();
+    
+    static ref JPREPROCESS: Mutex<Option<jpreprocess::JPreprocess<jpreprocess::DefaultTokenizer>>> = Mutex::new(None);
 
     // Comprehensive mapping from language codes to espeak-ng language codes
     // Includes ISO 639-1, ISO 639-2, and ISO 639-3 codes where possible
@@ -43,6 +46,8 @@ lazy_static! {
         // Japanese
         m.insert("ja", "ja");          // Japanese
         m.insert("jpn", "ja");         // ISO 639-2/3 code
+        m.insert("jp", "ja");          // Common alternative
+        m.insert("jap", "ja");         // Common alternative
 
         // Korean
         m.insert("ko", "ko");          // Korean
@@ -175,6 +180,8 @@ lazy_static! {
         // Japanese voices
         m.insert("ja", "jf_alpha");                   // Japanese - female voice
         m.insert("jpn", "jf_alpha");                  // Japanese (ISO code)
+        m.insert("jp", "jf_alpha");                   // Japanese (common alternative)
+        m.insert("jap", "jf_alpha");                  // Japanese (common alternative)
 
         // Korean voices - use the closest available
         m.insert("ko", "jf_alpha");                   // Korean - using Japanese female voice
@@ -219,6 +226,122 @@ lazy_static! {
         m
     };
 
+}
+
+/// Convert Japanese text to phonemes using jpreprocess
+///
+/// This function uses jpreprocess to properly handle Japanese text including kanji,
+/// and correctly pronounces particles like は (wa), へ (e), and を (o).
+pub fn japanese_text_to_phonemes(text: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut jpreprocess_guard = JPREPROCESS.lock().unwrap();
+    
+    if jpreprocess_guard.is_none() {
+        let config = jpreprocess::JPreprocessConfig {
+            dictionary: jpreprocess::SystemDictionaryConfig::Bundled(
+                jpreprocess::kind::JPreprocessDictionaryKind::NaistJdic
+            ),
+            user_dictionary: None,
+        };
+        *jpreprocess_guard = Some(jpreprocess::JPreprocess::from_config(config)?);
+    }
+    
+    let jpreprocess_instance = jpreprocess_guard.as_ref().unwrap();
+    
+    let labels = jpreprocess_instance.extract_fullcontext(text)?;
+    
+    let mut phonemes = Vec::new();
+    let mut prev_word_boundary = false;
+    
+    for label in labels {
+        let label_str = label.to_string();
+        
+        // Check if this is an accent phrase boundary by looking at the J field
+        // Format: .../J:x_y/...
+        // When x (mora position in accent phrase) is 1, it's the start of a new phrase
+        let is_phrase_start = if let Some(j_field) = label_str.split("/J:").nth(1) {
+            if let Some(first_num) = j_field.split('_').next() {
+                first_num == "1"
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        
+        if let Some(phoneme_part) = label_str.split('-').nth(1) {
+            let phoneme = phoneme_part.split('+').next().unwrap_or("");
+            if !phoneme.is_empty() && phoneme != "sil" {
+                // Handle pauses - convert to space for word boundaries
+                if phoneme == "pau" {
+                    phonemes.push(" ".to_string());
+                    prev_word_boundary = true;
+                    continue;
+                }
+                
+                // Add space before accent phrase boundaries (except at start and after pau)
+                if is_phrase_start && !phonemes.is_empty() && !prev_word_boundary {
+                    phonemes.push(" ".to_string());
+                }
+                prev_word_boundary = false;
+                
+                // Convert to lowercase to remove pitch accent markers
+                // Map Japanese romaji phonemes to IPA
+                let phoneme_lower = phoneme.to_lowercase();
+                let ipa_phoneme = match phoneme_lower.as_str() {
+                    // Vowels
+                    "a" => "a",
+                    "i" => "i",
+                    "u" => "ɯ",
+                    "e" => "e",
+                    "o" => "o",
+                    // Consonants
+                    "k" => "k",
+                    "g" => "ɡ",
+                    "s" => "s",
+                    "z" => "z",
+                    "t" => "t",
+                    "d" => "d",
+                    "n" => "n",
+                    "h" => "h",
+                    "b" => "b",
+                    "p" => "p",
+                    "m" => "m",
+                    "y" => "j",
+                    "r" => "ɹ",
+                    "w" => "w",
+                    // Special sounds
+                    "sh" => "ʃ",
+                    "ch" => "tʃ",
+                    "ts" => "ts",
+                    "j" => "dʒ",
+                    "f" => "ɸ",
+                    // Palatalized/Special
+                    "ky" => "kj",
+                    "gy" => "ɡj",
+                    "ny" => "nj",
+                    "hy" => "hj",
+                    "by" => "bj",
+                    "py" => "pj",
+                    "my" => "mj",
+                    "ry" => "ɹj",
+                    // Default: keep as-is
+                    _ => &phoneme_lower,
+                };
+                phonemes.push(ipa_phoneme.to_string());
+            }
+        }
+    }
+    
+    Ok(phonemes.join(""))
+}
+
+/// Normalize a language code to the corresponding espeak-ng language code
+///
+/// Takes any language code (ISO 639-1, ISO 639-2, ISO 639-3, or common alternatives)
+/// and returns the corresponding espeak-ng language code. If the language is not
+/// supported, returns None.
+pub fn normalize_language_code(lang_code: &str) -> Option<String> {
+    LANGUAGE_MAP.get(lang_code).map(|&code| code.to_string())
 }
 
 /// Language detection function based on whatlang
@@ -673,6 +796,16 @@ impl Phonemizer {
             .replace("r", "ɹ")
             .replace("x", "k")
             .replace("ɬ", "l");
+
+        // Apply Japanese-specific phoneme mappings
+        if self.lang == "ja" {
+            ps = ps
+                .replace("o̞", "o")
+                .replace("e̞", "e")
+                .replace("ɯᵝ", "ɯ")
+                .replace("ä", "a")
+                .replace("\u{031E}", "");
+        }
 
         // Apply regex patterns
         ps = PHONEME_PATTERNS.replace_all(&ps, " ").to_string();
