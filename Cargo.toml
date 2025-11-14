@@ -2,6 +2,16 @@
 members = ["koko", "kokorox", "kokorox-openai", "kokorox-websocket"]
 resolver = "2"
 
+# Configuration for cargo-release
+[workspace.metadata.release]
+# Use the same version across all workspace members
+shared-version = true
+# Consolidate all version bump commits into one
+consolidate-commits = true
+# Create a single tag for the workspace release
+tag-name = "v{{version}}"
+# Allow releases from main branch
+allow-branch = ["main"]
 
 # The profile that 'dist' will build with
 [profile.dist]
