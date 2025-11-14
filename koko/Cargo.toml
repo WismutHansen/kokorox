@@ -6,6 +6,7 @@ repository = "https://github.com/WismutHansen/kokorox.git"
 homepage = "https://github.com/WismutHansen/kokorox"
 authors = ["Lucas Jin", "Tommy Falkowski"]
 description = "Lightning fast text-to-speech CLI using the Kokoro model in rust"
+license = "Apache-2.0"
 
 [package.metadata.wix]
 upgrade-guid = "336CE5A3-EB28-4A3A-A4C0-477194EBD0F6"

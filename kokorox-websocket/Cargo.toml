@@ -5,6 +5,7 @@ edition = "2021"
 homepage = "https://github.com/WismutHansen/kokorox"
 authors = ["Lucas Jin", "Tommy Falkowski"]
 description = "WebSocket server for Kokorox TTS"
+license = "Apache-2.0"
 
 [dependencies]
 kokorox = { path = "../kokorox" }

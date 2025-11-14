@@ -6,6 +6,7 @@ homepage = "https://github.com/WismutHansen/kokorox"
 resolver = "2"
 authors = ["Lucas Jin", "Tommy Falkowski"]
 description = "Lightning fast text-to-speech with the Kokoro model in rust"
+license = "Apache-2.0"
 
 [dependencies]
 espeak-rs = "0.1.9"
