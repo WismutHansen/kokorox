@@ -1,6 +1,6 @@
 [package]
 name = "kokorox-websocket"
-version = "0.1.0"
+version = "0.1.5"
 edition = "2021"
 homepage = "https://github.com/WismutHansen/kokorox"
 authors = ["Lucas Jin", "Tommy Falkowski"]
