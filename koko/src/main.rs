@@ -1556,8 +1556,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         
                         eprintln!("Processing segment {}: {}", i+1, 
-                            if text_to_process.len() > 50 {
-                                format!("{}...", &text_to_process[..50])
+                            if text_to_process.chars().count() > 50 {
+                                let truncated: String = text_to_process.chars().take(50).collect();
+                                format!("{}...", truncated)
                             } else {
                                 text_to_process.clone() 
                             });

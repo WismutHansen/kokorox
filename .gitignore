@@ -7,5 +7,6 @@ venv/
 .vscode/
 checkpoints/*
 data/*
+docs/
 
 scripts/checkpoints/*
