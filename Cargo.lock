@@ -1739,7 +1739,7 @@ dependencies = [
 
 [[package]]
 name = "koko"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "clap",
  "ctrlc",
@@ -1754,7 +1754,7 @@ dependencies = [
 
 [[package]]
 name = "kokorox"
-version = "0.1.2"
+version = "0.1.5"
 dependencies = [
  "dirs",
  "espeak-rs",
@@ -1778,7 +1778,7 @@ dependencies = [
 
 [[package]]
 name = "kokorox-openai"
-version = "0.1.2"
+version = "0.1.5"
 dependencies = [
  "axum",
  "kokorox",
@@ -1788,7 +1788,7 @@ dependencies = [
 
 [[package]]
 name = "kokorox-websocket"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "base64 0.21.7",
  "futures-util",
@@ -3275,6 +3275,13 @@ dependencies = [
  "once_cell",
  "rustix 1.0.7",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "test_espeak_sys"
+version = "0.1.0"
+dependencies = [
+ "espeak-rs",
 ]
 
 [[package]]

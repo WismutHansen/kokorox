@@ -1,0 +1,172 @@
+<!--
+Label Studio Configuration for Kokoro Voice PCA Analysis
+
+This configuration defines the annotation interface for labeling voice samples.
+Each audio sample should be evaluated across multiple perceptual dimensions.
+
+Classifier Categories:
+1. Overall Quality - Overall quality rating to earmark good voices
+2. Gender Perception - How the voice is perceived gender-wise
+3. Age Perception - Perceived age range of the speaker
+4. Pitch - Overall pitch level of the voice
+5. Speaking Rate/Pace - Speed of speech delivery
+6. Energy/Dynamism - Liveliness and expressiveness
+7. Warmth - Emotional warmth and friendliness
+8. Clarity - Articulation and pronunciation clarity
+9. Accent Strength - Strength of non-native or regional accent
+10. Formality - Level of formality in speaking style
+11. Naturalness - How natural vs synthetic the voice sounds
+
+Usage:
+1. Import this XML in Label Studio project settings
+2. Import audio files from data/audio/
+3. Import metadata from data/mixed/*_metadata.json for pre-annotation context
+-->
+
+<View>
+  <Header value="Voice Sample Analysis" />
+  
+  <Text name="instructions" value="Listen to the audio sample and rate it across the following perceptual dimensions. Use the full range of scales to capture variations." />
+  
+  <!-- Audio Player -->
+  <Audio name="audio" value="$audio" />
+  
+  <!-- Metadata Display (if available) -->
+  <View style="margin-top: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
+    <Header value="Sample Information" size="4" />
+    <Text name="sample_id" value="ID: $id" />
+    <Text name="mix_type" value="Type: $type" />
+    <Text name="components_info" value="Components: $components_summary" />
+  </View>
+  
+  <Divider />
+  
+  <!-- 1. Overall Quality Rating -->
+  <Header value="1. Overall Quality" size="4" />
+  <Text name="quality_desc" value="Rate the overall quality of this voice. Would you use it in production?" />
+  <Rating name="quality" toName="audio" maxRating="5" icon="star" size="large" />
+  <Text name="quality_scale" value="1 = Poor (unusable), 2 = Below Average, 3 = Acceptable, 4 = Good, 5 = Excellent (production-ready)" style="color: #666; font-size: 12px;" />
+  
+  <!-- Bookmark for good voices -->
+  <View style="margin-top: 10px;">
+    <Choices name="bookmark" toName="audio" choice="single" showInline="true">
+      <Choice value="favorite" alias="Mark as Favorite Voice" />
+      <Choice value="promising" alias="Promising - Needs Work" />
+      <Choice value="skip" alias="Not Interesting" />
+    </Choices>
+  </View>
+  
+  <Divider />
+  
+  <!-- 2. Gender Perception -->
+  <Header value="2. Gender Perception" size="4" />
+  <Text name="gender_desc" value="How would you classify the perceived gender of this voice?" />
+  <Choices name="gender" toName="audio" choice="single" showInline="true">
+    <Choice value="strongly_masculine" />
+    <Choice value="masculine" />
+    <Choice value="neutral" />
+    <Choice value="feminine" />
+    <Choice value="strongly_feminine" />
+  </Choices>
+  
+  <!-- 3. Age Perception -->
+  <Header value="3. Perceived Age" size="4" />
+  <Text name="age_desc" value="What age range does this voice sound like?" />
+  <Choices name="age" toName="audio" choice="single" showInline="true">
+    <Choice value="child" alias="Child (under 13)" />
+    <Choice value="teenager" alias="Teenager (13-19)" />
+    <Choice value="young_adult" alias="Young Adult (20-35)" />
+    <Choice value="middle_aged" alias="Middle Aged (36-55)" />
+    <Choice value="senior" alias="Senior (56+)" />
+  </Choices>
+  
+  <!-- 4. Pitch Level -->
+  <Header value="4. Pitch Level" size="4" />
+  <Text name="pitch_desc" value="Rate the overall pitch level of the voice." />
+  <Rating name="pitch" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Text name="pitch_scale" value="1 = Very Low, 4 = Medium, 7 = Very High" style="color: #666; font-size: 12px;" />
+  
+  <!-- 5. Speaking Rate/Pace -->
+  <Header value="5. Speaking Rate" size="4" />
+  <Text name="pace_desc" value="How fast is the speech delivery?" />
+  <Rating name="pace" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Text name="pace_scale" value="1 = Very Slow, 4 = Normal, 7 = Very Fast" style="color: #666; font-size: 12px;" />
+  
+  <!-- 6. Energy/Dynamism -->
+  <Header value="6. Energy Level" size="4" />
+  <Text name="energy_desc" value="How energetic and dynamic is the voice?" />
+  <Rating name="energy" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Text name="energy_scale" value="1 = Very Calm/Monotone, 4 = Moderate, 7 = Very Energetic" style="color: #666; font-size: 12px;" />
+  
+  <!-- 7. Warmth -->
+  <Header value="7. Warmth" size="4" />
+  <Text name="warmth_desc" value="How warm and friendly does the voice sound?" />
+  <Rating name="warmth" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Text name="warmth_scale" value="1 = Cold/Distant, 4 = Neutral, 7 = Very Warm/Friendly" style="color: #666; font-size: 12px;" />
+  
+  <!-- 8. Clarity -->
+  <Header value="8. Clarity/Articulation" size="4" />
+  <Text name="clarity_desc" value="How clear and well-articulated is the speech?" />
+  <Rating name="clarity" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Text name="clarity_scale" value="1 = Very Unclear/Muffled, 4 = Average, 7 = Crystal Clear" style="color: #666; font-size: 12px;" />
+  
+  <!-- 9. Accent Strength -->
+  <Header value="9. Accent Characteristics" size="4" />
+  <Text name="accent_desc" value="Rate the strength of any non-standard accent." />
+  <Rating name="accent_strength" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Text name="accent_scale" value="1 = No Accent (Standard), 4 = Moderate Accent, 7 = Very Strong Accent" style="color: #666; font-size: 12px;" />
+  
+  <!-- 10. Formality -->
+  <Header value="10. Formality Level" size="4" />
+  <Text name="formality_desc" value="How formal does the speaking style sound?" />
+  <Rating name="formality" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Text name="formality_scale" value="1 = Very Casual, 4 = Neutral, 7 = Very Formal/Professional" style="color: #666; font-size: 12px;" />
+  
+  <!-- 11. Naturalness -->
+  <Header value="11. Naturalness" size="4" />
+  <Text name="naturalness_desc" value="How natural does the voice sound (vs synthetic/robotic)?" />
+  <Rating name="naturalness" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Text name="naturalness_scale" value="1 = Very Synthetic, 4 = Somewhat Natural, 7 = Completely Natural" style="color: #666; font-size: 12px;" />
+  
+  <Divider />
+  
+  <!-- Additional Observations -->
+  <Header value="Additional Observations" size="4" />
+  
+  <!-- Emotional Tone -->
+  <Text name="emotion_desc" value="Primary emotional tone (select all that apply):" />
+  <Choices name="emotions" toName="audio" choice="multiple" showInline="true">
+    <Choice value="neutral" />
+    <Choice value="happy" />
+    <Choice value="sad" />
+    <Choice value="authoritative" />
+    <Choice value="friendly" />
+    <Choice value="professional" />
+    <Choice value="playful" />
+    <Choice value="serious" />
+    <Choice value="calming" />
+    <Choice value="urgent" />
+  </Choices>
+  
+  <!-- Use Case Fit -->
+  <Text name="usecase_desc" value="Best suited for (select all that apply):" />
+  <Choices name="usecases" toName="audio" choice="multiple" showInline="true">
+    <Choice value="audiobook" />
+    <Choice value="assistant" />
+    <Choice value="news" />
+    <Choice value="meditation" />
+    <Choice value="gaming" />
+    <Choice value="education" />
+    <Choice value="advertising" />
+    <Choice value="podcast" />
+    <Choice value="customer_service" />
+    <Choice value="navigation" />
+  </Choices>
+  
+  <!-- Free-form Notes -->
+  <Header value="Notes" size="4" />
+  <TextArea name="notes" toName="audio" 
+            placeholder="Any additional observations about this voice sample..."
+            rows="3" />
+  
+</View>

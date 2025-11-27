@@ -1,0 +1,12 @@
+target/
+vendor/
+*.wav
+*.DS_store
+.venv
+venv/
+.vscode/
+checkpoints/*
+data/*
+docs/
+
+scripts/checkpoints/*
