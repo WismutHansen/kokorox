@@ -4,32 +4,28 @@ Label Studio Configuration for Kokoro Voice PCA Analysis
 This configuration defines the annotation interface for labeling voice samples.
 Each audio sample should be evaluated across multiple perceptual dimensions.
 
-Classifier Categories:
-1. Overall Quality - Overall quality rating to earmark good voices
-2. Gender Perception - How the voice is perceived gender-wise
-3. Age Perception - Perceived age range of the speaker
-4. Pitch - Overall pitch level of the voice
-5. Speaking Rate/Pace - Speed of speech delivery
-6. Energy/Dynamism - Liveliness and expressiveness
-7. Warmth - Emotional warmth and friendliness
-8. Clarity - Articulation and pronunciation clarity
-9. Accent Strength - Strength of non-native or regional accent
-10. Formality - Level of formality in speaking style
-11. Naturalness - How natural vs synthetic the voice sounds
+Keyboard Shortcuts:
+  Audio: Space = play/pause
+  Ratings: 1-7 keys for rating values
+  Navigation: Ctrl+Enter = submit, Ctrl+Backspace = skip
+  
+  Bookmark: f = favorite, p = promising, s = skip
+  Gender: Shift+1-5 for gender scale
+  Age: a then 1-5 for age groups
 
 Usage:
 1. Import this XML in Label Studio project settings
-2. Import audio files from data/audio/
-3. Import metadata from data/mixed/*_metadata.json for pre-annotation context
+2. Import tasks from data/label_studio_tasks.json
+3. Start annotating with keyboard shortcuts
 -->
 
 <View>
   <Header value="Voice Sample Analysis" />
   
-  <Text name="instructions" value="Listen to the audio sample and rate it across the following perceptual dimensions. Use the full range of scales to capture variations." />
+  <Text name="instructions" value="Listen (Space=play/pause) and rate. Use number keys 1-7 for ratings. Ctrl+Enter=submit." />
   
   <!-- Audio Player -->
-  <Audio name="audio" value="$audio" />
+  <Audio name="audio" value="$audio" hotkey="space" />
   
   <!-- Metadata Display (if available) -->
   <View style="margin-top: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
@@ -39,96 +35,124 @@ Usage:
     <Text name="components_info" value="Components: $components_summary" />
   </View>
   
-  <Divider />
   
   <!-- 1. Overall Quality Rating -->
-  <Header value="1. Overall Quality" size="4" />
+  <Header value="1. Overall Quality [q + 1-5]" size="4" />
   <Text name="quality_desc" value="Rate the overall quality of this voice. Would you use it in production?" />
-  <Rating name="quality" toName="audio" maxRating="5" icon="star" size="large" />
+  <Rating name="quality" toName="audio" maxRating="5" icon="star" size="large" hotkey="q" />
   <Text name="quality_scale" value="1 = Poor (unusable), 2 = Below Average, 3 = Acceptable, 4 = Good, 5 = Excellent (production-ready)" style="color: #666; font-size: 12px;" />
   
   <!-- Bookmark for good voices -->
   <View style="margin-top: 10px;">
+    <Text name="bookmark_label" value="Bookmark [f/p/s]:" style="font-weight: bold;" />
     <Choices name="bookmark" toName="audio" choice="single" showInline="true">
-      <Choice value="favorite" alias="Mark as Favorite Voice" />
-      <Choice value="promising" alias="Promising - Needs Work" />
-      <Choice value="skip" alias="Not Interesting" />
+      <Choice value="favorite" alias="Favorite" hotkey="f" />
+      <Choice value="promising" alias="Promising" hotkey="p" />
+      <Choice value="skip" alias="Skip" hotkey="x" />
     </Choices>
   </View>
   
-  <Divider />
   
   <!-- 2. Gender Perception -->
-  <Header value="2. Gender Perception" size="4" />
+  <Header value="2. Gender Perception [g + 1-5]" size="4" />
   <Text name="gender_desc" value="How would you classify the perceived gender of this voice?" />
   <Choices name="gender" toName="audio" choice="single" showInline="true">
-    <Choice value="strongly_masculine" />
-    <Choice value="masculine" />
-    <Choice value="neutral" />
-    <Choice value="feminine" />
-    <Choice value="strongly_feminine" />
+    <Choice value="strongly_masculine" alias="1: Strongly Masc" hotkey="g+1" />
+    <Choice value="masculine" alias="2: Masculine" hotkey="g+2" />
+    <Choice value="neutral" alias="3: Neutral" hotkey="g+3" />
+    <Choice value="feminine" alias="4: Feminine" hotkey="g+4" />
+    <Choice value="strongly_feminine" alias="5: Strongly Fem" hotkey="g+5" />
   </Choices>
   
   <!-- 3. Age Perception -->
-  <Header value="3. Perceived Age" size="4" />
+  <Header value="3. Perceived Age [a + 1-5]" size="4" />
   <Text name="age_desc" value="What age range does this voice sound like?" />
   <Choices name="age" toName="audio" choice="single" showInline="true">
-    <Choice value="child" alias="Child (under 13)" />
-    <Choice value="teenager" alias="Teenager (13-19)" />
-    <Choice value="young_adult" alias="Young Adult (20-35)" />
-    <Choice value="middle_aged" alias="Middle Aged (36-55)" />
-    <Choice value="senior" alias="Senior (56+)" />
+    <Choice value="child" alias="1: Child" hotkey="a+1" />
+    <Choice value="teenager" alias="2: Teen" hotkey="a+2" />
+    <Choice value="young_adult" alias="3: Young Adult" hotkey="a+3" />
+    <Choice value="middle_aged" alias="4: Middle Aged" hotkey="a+4" />
+    <Choice value="senior" alias="5: Senior" hotkey="a+5" />
   </Choices>
   
   <!-- 4. Pitch Level -->
-  <Header value="4. Pitch Level" size="4" />
+  <Header value="4. Pitch Level [i + 1-7]" size="4" />
   <Text name="pitch_desc" value="Rate the overall pitch level of the voice." />
-  <Rating name="pitch" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Rating name="pitch" toName="audio" maxRating="7" icon="star" size="medium" hotkey="i" />
   <Text name="pitch_scale" value="1 = Very Low, 4 = Medium, 7 = Very High" style="color: #666; font-size: 12px;" />
   
   <!-- 5. Speaking Rate/Pace -->
-  <Header value="5. Speaking Rate" size="4" />
+  <Header value="5. Speaking Rate [r + 1-7]" size="4" />
   <Text name="pace_desc" value="How fast is the speech delivery?" />
-  <Rating name="pace" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Rating name="pace" toName="audio" maxRating="7" icon="star" size="medium" hotkey="r" />
   <Text name="pace_scale" value="1 = Very Slow, 4 = Normal, 7 = Very Fast" style="color: #666; font-size: 12px;" />
   
   <!-- 6. Energy/Dynamism -->
-  <Header value="6. Energy Level" size="4" />
+  <Header value="6. Energy Level [e + 1-7]" size="4" />
   <Text name="energy_desc" value="How energetic and dynamic is the voice?" />
-  <Rating name="energy" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Rating name="energy" toName="audio" maxRating="7" icon="star" size="medium" hotkey="e" />
   <Text name="energy_scale" value="1 = Very Calm/Monotone, 4 = Moderate, 7 = Very Energetic" style="color: #666; font-size: 12px;" />
   
   <!-- 7. Warmth -->
-  <Header value="7. Warmth" size="4" />
+  <Header value="7. Warmth [w + 1-7]" size="4" />
   <Text name="warmth_desc" value="How warm and friendly does the voice sound?" />
-  <Rating name="warmth" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Rating name="warmth" toName="audio" maxRating="7" icon="star" size="medium" hotkey="w" />
   <Text name="warmth_scale" value="1 = Cold/Distant, 4 = Neutral, 7 = Very Warm/Friendly" style="color: #666; font-size: 12px;" />
   
   <!-- 8. Clarity -->
-  <Header value="8. Clarity/Articulation" size="4" />
+  <Header value="8. Clarity/Articulation [c + 1-7]" size="4" />
   <Text name="clarity_desc" value="How clear and well-articulated is the speech?" />
-  <Rating name="clarity" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Rating name="clarity" toName="audio" maxRating="7" icon="star" size="medium" hotkey="c" />
   <Text name="clarity_scale" value="1 = Very Unclear/Muffled, 4 = Average, 7 = Crystal Clear" style="color: #666; font-size: 12px;" />
   
-  <!-- 9. Accent Strength -->
-  <Header value="9. Accent Characteristics" size="4" />
+  <!-- 9. Accent Characteristics -->
+  <Header value="9. Accent Characteristics [t + 1-7]" size="4" />
   <Text name="accent_desc" value="Rate the strength of any non-standard accent." />
-  <Rating name="accent_strength" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Rating name="accent_strength" toName="audio" maxRating="7" icon="star" size="medium" hotkey="t" />
   <Text name="accent_scale" value="1 = No Accent (Standard), 4 = Moderate Accent, 7 = Very Strong Accent" style="color: #666; font-size: 12px;" />
   
+  <View style="margin-top: 10px;">
+    <Text name="accent_locale_desc" value="Perceived accent locale/origin:" />
+    <Choices name="accent_locale" toName="audio" choice="single" showInline="true">
+      <Choice value="none" alias="None/Neutral" hotkey="0" />
+      <Choice value="en_us" alias="US" />
+      <Choice value="en_gb" alias="UK" />
+      <Choice value="en_au" alias="AU" />
+      <Choice value="en_in" alias="IN" />
+      <Choice value="en_ie" alias="IE" />
+      <Choice value="en_scot" alias="Scot" />
+      <Choice value="es" alias="ES" />
+      <Choice value="fr" alias="FR" />
+      <Choice value="de" alias="DE" />
+      <Choice value="it" alias="IT" />
+      <Choice value="ru" alias="RU" />
+      <Choice value="zh" alias="ZH" />
+      <Choice value="ja" alias="JA" />
+      <Choice value="ko" alias="KO" />
+      <Choice value="ar" alias="AR" />
+      <Choice value="pt_br" alias="PT-BR" />
+      <Choice value="other" alias="Other" hotkey="o" />
+    </Choices>
+  </View>
+  
+  <View style="margin-top: 5px;">
+    <TextArea name="accent_locale_other" toName="audio" 
+              placeholder="If 'Other', specify the accent locale..."
+              rows="1" />
+  </View>
+  
   <!-- 10. Formality -->
-  <Header value="10. Formality Level" size="4" />
+  <Header value="10. Formality Level [m + 1-7]" size="4" />
   <Text name="formality_desc" value="How formal does the speaking style sound?" />
-  <Rating name="formality" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Rating name="formality" toName="audio" maxRating="7" icon="star" size="medium" hotkey="m" />
   <Text name="formality_scale" value="1 = Very Casual, 4 = Neutral, 7 = Very Formal/Professional" style="color: #666; font-size: 12px;" />
   
   <!-- 11. Naturalness -->
-  <Header value="11. Naturalness" size="4" />
+  <Header value="11. Naturalness [n + 1-7]" size="4" />
   <Text name="naturalness_desc" value="How natural does the voice sound (vs synthetic/robotic)?" />
-  <Rating name="naturalness" toName="audio" maxRating="7" icon="star" size="medium" />
+  <Rating name="naturalness" toName="audio" maxRating="7" icon="star" size="medium" hotkey="n" />
   <Text name="naturalness_scale" value="1 = Very Synthetic, 4 = Somewhat Natural, 7 = Completely Natural" style="color: #666; font-size: 12px;" />
   
-  <Divider />
   
   <!-- Additional Observations -->
   <Header value="Additional Observations" size="4" />

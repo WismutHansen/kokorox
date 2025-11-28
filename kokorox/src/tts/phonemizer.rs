@@ -1,5 +1,6 @@
+use crate::tts::chinese::ChineseG2P;
 use crate::tts::normalize;
-use crate::tts::vocab::VOCAB;
+use crate::tts::vocab::{VOCAB, ZH_VOCAB};
 use espeak_rs::text_to_phonemes;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -12,6 +13,9 @@ lazy_static! {
     static ref NINETY_PATTERN: Regex = Regex::new(r"(?<=nˈaɪn)ti(?!ː)").unwrap();
     
     static ref JPREPROCESS: Mutex<Option<jpreprocess::JPreprocess<jpreprocess::DefaultTokenizer>>> = Mutex::new(None);
+    
+    /// Chinese G2P instance
+    static ref CHINESE_G2P: Mutex<ChineseG2P> = Mutex::new(ChineseG2P::new());
 
     // Comprehensive mapping from language codes to espeak-ng language codes
     // Includes ISO 639-1, ISO 639-2, and ISO 639-3 codes where possible
@@ -60,13 +64,13 @@ lazy_static! {
         m.insert("de-at", "de");       // Austrian German
         m.insert("de-ch", "de");       // Swiss German
 
-        m.insert("fr", "fr-fr");       // French
-        m.insert("fra", "fr-fr");      // ISO 639-2/3 code
-        m.insert("fre", "fr-fr");      // ISO 639-2 code
-        m.insert("fr-fr", "fr-fr");    // France French
-        m.insert("fr-ca", "fr-ca");    // Canadian French
-        m.insert("fr-be", "fr-fr");    // Belgian French
-        m.insert("fr-ch", "fr-fr");    // Swiss French
+        m.insert("fr", "fr");          // French
+        m.insert("fra", "fr");         // ISO 639-2/3 code
+        m.insert("fre", "fr");         // ISO 639-2 code
+        m.insert("fr-fr", "fr");       // France French
+        m.insert("fr-ca", "fr");       // Canadian French (eSpeak uses fr for all)
+        m.insert("fr-be", "fr");       // Belgian French
+        m.insert("fr-ch", "fr");       // Swiss French
 
         m.insert("it", "it");          // Italian
         m.insert("ita", "it");         // ISO 639-2/3 code
@@ -189,7 +193,7 @@ lazy_static! {
 
         // European languages - female voices where possible
         m.insert("de", "bf_emma");                    // German - using British female voice
-        m.insert("fr-fr", "ff_siwis");                // French
+        m.insert("fr", "ff_siwis");                   // French
         m.insert("es", "ef_dora");                    // Spanish - using native Spanish female voice
         m.insert("es-es", "ef_dora");                 // Spanish (Spain) - using native Spanish female voice
         m.insert("es-mx", "ef_dora");                 // Spanish (Mexico) - using native Spanish female voice
@@ -468,8 +472,8 @@ pub fn get_default_voice_for_language(language: &str, _is_custom: bool) -> Strin
                     }
                 }
                 "fr" => {
-                    if let Some(voice) = voice_map.get("fr-fr") {
-                        println!("Using 'fr-fr' voice for language '{}'", language);
+                    if let Some(voice) = voice_map.get("fr") {
+                        println!("Using 'fr' voice for language '{}'", language);
                         return voice.to_string();
                     }
                 }
@@ -545,7 +549,7 @@ impl Phonemizer {
         langs.insert("zh", "Chinese (Mandarin)");
         langs.insert("ja", "Japanese");
         langs.insert("de", "German");
-        langs.insert("fr-fr", "French");
+        langs.insert("fr", "French");
         langs.insert("es", "Spanish");
         langs.insert("pt-pt", "Portuguese");
         langs.insert("ru", "Russian");
@@ -734,8 +738,14 @@ impl Phonemizer {
         }
 
         // Use our improved phonemization process
-        // For Spanish text in particular, we need to ensure accents are preserved
-        let phonemes = if self.lang.starts_with("es") {
+        // Chinese uses native Rust G2P implementation
+        let phonemes = if self.lang.starts_with("zh") {
+            // Use native Chinese G2P
+            let g2p = CHINESE_G2P.lock().unwrap();
+            let result = g2p.process(&text_to_phonemize);
+            println!("CHINESE PHONEMIZATION: {} -> {}", text_to_phonemize, result);
+            result
+        } else if self.lang.starts_with("es") {
             // For Spanish text, try to preserve accents and handle problematic patterns
             match text_to_phonemes(
                 &text_to_phonemize, // Use our preprocessed text with accents restored
@@ -815,8 +825,13 @@ impl Phonemizer {
             ps = NINETY_PATTERN.replace_all(&ps, "di").to_string();
         }
 
-        // Filter characters present in vocabulary
-        ps = ps.chars().filter(|&c| VOCAB.contains_key(&c)).collect();
+        // Filter characters present in the appropriate vocabulary
+        // Chinese uses ZH_VOCAB (Bopomofo-based), others use VOCAB (IPA-based)
+        if self.lang.starts_with("zh") {
+            ps = ps.chars().filter(|&c| ZH_VOCAB.contains_key(&c)).collect();
+        } else {
+            ps = ps.chars().filter(|&c| VOCAB.contains_key(&c)).collect();
+        }
 
         ps.trim().to_string()
     }

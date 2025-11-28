@@ -1,6 +1,6 @@
 use crate::tts::phonemizer::{detect_language, get_default_voice_for_language, normalize_language_code};
 use crate::tts::phonemizer::japanese_text_to_phonemes;
-use crate::tts::tokenize::tokenize;
+use crate::tts::tokenize::{tokenize, tokenize_with_variant, ModelVariant as TokenizerVariant};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -12,6 +12,9 @@ use ndarray_npy::NpzReader;
 use std::fs::File;
 
 use espeak_rs::text_to_phonemes;
+
+// Re-export ModelVariant for users of the TTS module
+pub use crate::utils::hf_cache::ModelVariant;
 
 #[derive(Debug, Clone)]
 pub struct TTSOpts<'a> {
@@ -35,6 +38,8 @@ pub struct TTSKoko {
     model: Arc<ort_koko::OrtKoko>,
     styles: HashMap<String, Vec<[[f32; 256]; 1]>>,
     init_config: InitConfig,
+    /// Model variant being used (English/multilingual or Chinese)
+    model_variant: ModelVariant,
 }
 
 #[derive(Clone)]
@@ -51,6 +56,140 @@ impl Default for InitConfig {
             voices_url: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin".into(),
             sample_rate: 24000,
         }
+    }
+}
+
+/// TTSManager handles dynamic model switching between English and Chinese models.
+/// It loads one model at a time and switches when needed to conserve memory.
+#[derive(Clone)]
+pub struct TTSManager {
+    current_tts: Arc<tokio::sync::RwLock<Option<TTSKoko>>>,
+    current_variant: Arc<tokio::sync::RwLock<Option<ModelVariant>>>,
+    model_type: Option<String>,
+}
+
+impl TTSManager {
+    /// Create a new TTSManager without preloading any model
+    pub fn new(model_type: Option<String>) -> Self {
+        Self {
+            current_tts: Arc::new(tokio::sync::RwLock::new(None)),
+            current_variant: Arc::new(tokio::sync::RwLock::new(None)),
+            model_type,
+        }
+    }
+    
+    /// Create a new TTSManager with a specific model preloaded
+    pub async fn with_variant(variant: ModelVariant, model_type: Option<String>) -> Self {
+        let tts = TTSKoko::new_with_variant(None, None, model_type.as_deref(), variant).await;
+        Self {
+            current_tts: Arc::new(tokio::sync::RwLock::new(Some(tts))),
+            current_variant: Arc::new(tokio::sync::RwLock::new(Some(variant))),
+            model_type,
+        }
+    }
+    
+    /// Determine which model variant to use based on language
+    pub fn variant_for_language(language: &str) -> ModelVariant {
+        if language.starts_with("zh") {
+            ModelVariant::V1Chinese
+        } else {
+            ModelVariant::V1English
+        }
+    }
+    
+    /// Check if text contains Chinese characters
+    pub fn text_is_chinese(text: &str) -> bool {
+        text.chars().any(|c| {
+            let cp = c as u32;
+            (0x4E00..=0x9FFF).contains(&cp) ||  // CJK Unified Ideographs
+            (0x3400..=0x4DBF).contains(&cp) ||  // CJK Extension A
+            (0x3000..=0x303F).contains(&cp)     // CJK Punctuation
+        })
+    }
+    
+    /// Get the appropriate TTS instance for the given language, switching models if needed.
+    /// Returns a clone of the TTSKoko instance.
+    pub async fn get_tts_for_language(&self, language: &str) -> TTSKoko {
+        let needed_variant = Self::variant_for_language(language);
+        
+        // Check if we need to switch models
+        {
+            let current = self.current_variant.read().await;
+            if *current == Some(needed_variant) {
+                // Already have the right model loaded
+                let tts = self.current_tts.read().await;
+                if let Some(ref t) = *tts {
+                    return t.clone();
+                }
+            }
+        }
+        
+        // Need to switch models
+        println!("Switching to {:?} model...", needed_variant);
+        let new_tts = TTSKoko::new_with_variant(
+            None, 
+            None, 
+            self.model_type.as_deref(), 
+            needed_variant
+        ).await;
+        
+        // Update the stored TTS
+        {
+            let mut tts = self.current_tts.write().await;
+            let mut variant = self.current_variant.write().await;
+            *tts = Some(new_tts.clone());
+            *variant = Some(needed_variant);
+        }
+        
+        new_tts
+    }
+    
+    /// Get the current TTS instance without switching, if one is loaded
+    pub async fn current_tts(&self) -> Option<TTSKoko> {
+        self.current_tts.read().await.clone()
+    }
+    
+    /// Get the current model variant
+    pub async fn current_variant(&self) -> Option<ModelVariant> {
+        *self.current_variant.read().await
+    }
+    
+    /// Synthesize audio, automatically selecting the right model based on language
+    pub async fn tts_raw_audio(
+        &self,
+        txt: &str,
+        lan: &str,
+        style_name: &str,
+        speed: f32,
+        initial_silence: Option<usize>,
+        auto_detect_language: bool,
+        force_style: bool,
+        phonemes: bool,
+    ) -> Result<Vec<f32>, Box<dyn std::error::Error + Send + Sync>> {
+        // Determine language - either from parameter or auto-detect from text
+        let effective_language = if auto_detect_language && Self::text_is_chinese(txt) {
+            "zh"
+        } else {
+            lan
+        };
+        
+        let tts = self.get_tts_for_language(effective_language).await;
+        tts.tts_raw_audio(txt, lan, style_name, speed, initial_silence, auto_detect_language, force_style, phonemes)
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) })
+    }
+    
+    /// Get available voices for the currently loaded model
+    pub async fn get_available_voices(&self) -> Vec<String> {
+        if let Some(tts) = self.current_tts.read().await.as_ref() {
+            tts.get_available_voices()
+        } else {
+            Vec::new()
+        }
+    }
+    
+    /// Get sample rate
+    pub fn sample_rate(&self) -> u32 {
+        24000 // Both models use same sample rate
     }
 }
 
@@ -355,22 +494,46 @@ impl TTSKoko {
 
     /// Create a new TTSKoko instance with specific model type
     pub async fn new_with_model_type(model_path: Option<&str>, voices_path: Option<&str>, model_type: Option<&str>) -> Self {
+        Self::new_with_variant(model_path, voices_path, model_type, ModelVariant::V1English).await
+    }
+    
+    /// Create a new TTSKoko instance with specific model variant (English or Chinese)
+    pub async fn new_with_variant(
+        model_path: Option<&str>, 
+        voices_path: Option<&str>, 
+        model_type: Option<&str>,
+        variant: ModelVariant
+    ) -> Self {
         // Use HF cache logic to ensure files are available
-        let (resolved_model_path, resolved_voices_path) = crate::utils::hf_cache::ensure_files_available(
+        let (resolved_model_path, resolved_voices_path) = crate::utils::hf_cache::ensure_files_available_variant(
             model_path,
             voices_path, 
-            model_type
+            model_type,
+            variant
         ).await.expect("Failed to ensure model and voices files are available");
         
-        Self::from_paths(resolved_model_path.to_string_lossy().as_ref(), resolved_voices_path.to_string_lossy().as_ref()).await
+        Self::from_paths_with_variant(
+            resolved_model_path.to_string_lossy().as_ref(), 
+            resolved_voices_path.to_string_lossy().as_ref(),
+            variant
+        ).await
     }
 
     /// Create TTSKoko from explicit file paths (legacy method)
     pub async fn from_paths(model_path: &str, voices_path: &str) -> Self {
-        Self::from_config(model_path, voices_path, InitConfig::default()).await
+        Self::from_paths_with_variant(model_path, voices_path, ModelVariant::V1English).await
+    }
+    
+    /// Create TTSKoko from explicit file paths with variant
+    pub async fn from_paths_with_variant(model_path: &str, voices_path: &str, variant: ModelVariant) -> Self {
+        Self::from_config_with_variant(model_path, voices_path, InitConfig::default(), variant).await
     }
 
     pub async fn from_config(model_path: &str, voices_path: &str, cfg: InitConfig) -> Self {
+        Self::from_config_with_variant(model_path, voices_path, cfg, ModelVariant::V1English).await
+    }
+    
+    pub async fn from_config_with_variant(model_path: &str, voices_path: &str, cfg: InitConfig, variant: ModelVariant) -> Self {
         if !Path::new(model_path).exists() {
             utils::fileio::download_file_from_url(cfg.model_url.as_str(), model_path)
                 .await
@@ -399,7 +562,13 @@ impl TTSKoko {
             model,
             styles,
             init_config: cfg,
+            model_variant: variant,
         }
+    }
+    
+    /// Get the model variant being used
+    pub fn model_variant(&self) -> ModelVariant {
+        self.model_variant
     }
     
     // Check if the voices file is a custom voices file
@@ -829,6 +998,14 @@ impl TTSKoko {
                 // When --phonemes flag is used, treat input as IPA phonemes directly
                 println!("PHONEMES MODE: Using input as IPA phonemes directly: {}", chunk);
                 chunk.to_string()
+            } else if language.starts_with("zh") {
+                // Use native Chinese G2P for Mandarin Chinese
+                use crate::tts::chinese::ChineseG2P;
+                println!("CALLING CHINESE G2P ON: {}", processed_chunk);
+                let g2p = ChineseG2P::new();
+                let phonemes = g2p.process(&processed_chunk);
+                println!("CHINESE G2P RESULT: {}", phonemes);
+                phonemes
             } else if language == "ja" {
                 // Use jpreprocess for Japanese to properly handle kanji and particles
                 println!("CALLING JPREPROCESS ON: {}", processed_chunk);
@@ -875,7 +1052,11 @@ impl TTSKoko {
                 println!("Original: {}", chunk);
                 println!("Phonemes after fix: {}", phonemes);
             }
-            let mut tokens = tokenize(&phonemes);
+            // Use the appropriate vocabulary based on model variant
+            let mut tokens = match self.model_variant {
+                ModelVariant::V1Chinese => tokenize_with_variant(&phonemes, TokenizerVariant::Chinese),
+                ModelVariant::V1English => tokenize_with_variant(&phonemes, TokenizerVariant::English),
+            };
 
             for _ in 0..initial_silence.unwrap_or(0) {
                 tokens.insert(0, 30);

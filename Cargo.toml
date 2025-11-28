@@ -1,5 +1,5 @@
 [workspace]
-members = ["koko", "kokorox", "kokorox-openai", "kokorox-websocket", "test_espeak_sys", "test_lang"]
+members = ["koko", "kokorox", "kokorox-openai", "kokorox-websocket"]
 resolver = "2"
 
 # Configuration for cargo-release

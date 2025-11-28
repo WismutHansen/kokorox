@@ -1,0 +1,83 @@
+# Koko TTS Configuration
+# 
+# This is the default configuration file for koko.
+# Place your custom config at:
+#   - $XDG_CONFIG_HOME/koko/config.toml (or ~/.config/koko/config.toml)
+#   - ./config.toml (local directory, higher priority)
+#
+# Configuration priority (highest to lowest):
+#   1. Command line arguments
+#   2. Config file specified via --config flag
+#   3. Environment variables (KOKO_*)
+#   4. Local config file (./config.toml)
+#   5. Global config file ($XDG_CONFIG_HOME/koko/config.toml)
+#
+# Environment variables use KOKO_ prefix, e.g.:
+#   KOKO_OUTPUT_DIR=/custom/path
+#   KOKO_LANGUAGE=es
+#   KOKO_SERVER__OPENAI_PORT=8080
+#
+# Paths support ~ and environment variable expansion, e.g.:
+#   output_dir = "~/audio/koko"
+#   output_dir = "$HOME/audio/koko"
+#   model_path = "$XDG_DATA_HOME/koko/models/custom.onnx"
+
+# Output directory for generated audio files
+# Supports ~ and $ENV_VAR expansion
+output_dir = "tmp"
+
+# Default language for TTS
+# Common values: en-us, en-gb, es, fr, de, zh, ja, pt-pt
+language = "en-us"
+
+# Default voice style
+# Examples:
+#   English US: af_heart, af_sarah, am_adam, am_michael
+#   English UK: bf_emma, bm_george
+#   Spanish: ef_dora, em_alex
+#   Japanese: jf_alpha, jm_beta
+#   Chinese: zf_xiaobei, zm_yunjian
+# Voice mixing: voice1.weight+voice2.weight (e.g., af_sarah.4+af_nicole.6)
+style = "af_heart"
+
+# Speech speed (1.0 = normal, <1.0 = slower, >1.0 = faster)
+speed = 1.0
+
+# Auto-detect language from input text
+auto_detect = false
+
+# Force the specified style (don't auto-select based on language)
+force_style = false
+
+# Output audio in mono format (default is stereo)
+mono = false
+
+# Path to custom model file (optional, defaults to HuggingFace cache)
+# model_path = "$XDG_DATA_HOME/koko/models/kokoro-v1.0.onnx"
+
+# Path to custom voices data file (optional, defaults to HuggingFace cache)
+# data_path = "$XDG_DATA_HOME/koko/voices/voices-v1.0.bin"
+
+# Model type for HuggingFace downloads
+# Options: fp16, q4, q4f16, q8f16, quantized, uint8, uint8f16
+# model_type = "fp16"
+
+# Initial silence duration in tokens (optional)
+# initial_silence = 0
+
+# Enable verbose debug output
+verbose = false
+
+# Enable detailed accent debugging for non-English languages
+debug_accents = false
+
+# Server configuration
+[server]
+# IP address to bind servers to (0.0.0.0 for all interfaces, 127.0.0.1 for localhost only)
+ip = "0.0.0.0"
+
+# Port for OpenAI-compatible HTTP server
+openai_port = 3000
+
+# Port for WebSocket server
+websocket_port = 8766

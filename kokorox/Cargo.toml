@@ -10,6 +10,7 @@ license = "Apache-2.0"
 
 [dependencies]
 espeak-rs = "0.1.9"
+futures = "0.3"
 hound = "3.5.1"
 indicatif = "0.17.9"
 ndarray = "0.16.1"
@@ -21,6 +22,11 @@ tokio = { version = "1.0", features = ["fs", "io-util"] }
 ndarray-npy = "0.9.1"
 whatlang = "0.16.4"
 jpreprocess = { version = "0.12.0", features = ["naist-jdic"] }
+
+# Chinese G2P dependencies
+jieba-rs = "0.8"
+pinyin = "0.10"
+chinese-number = "0.7"
 
 mp3lame-encoder = "0.2.1"
 parking_lot = "0.12"

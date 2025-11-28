@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use kokorox::{
-    tts::koko::{TTSKoko, TTSOpts},
+    tts::koko::{TTSKoko, TTSManager, TTSOpts},
     utils::wav::{write_audio_chunk, WavHeader},
 };
 use regex::Regex;
@@ -17,6 +17,9 @@ use std::{
     path::Path,
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
+
+mod config;
+use config::{AppConfig, expand_path};
 
 struct ChannelSource {
     rx: Receiver<Vec<f32>>,
@@ -69,7 +72,7 @@ impl Source for ChannelSource {
     }
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum Mode {
     /// Generate speech for a string of text
     #[command(alias = "t", long_flag_alias = "text", short_flag_alias = 't')]
@@ -83,13 +86,13 @@ enum Mode {
         text: String,
 
         /// Path to output the WAV file to on the filesystem
+        /// Default: {output_dir}/output.wav (from config)
         #[arg(
             short = 'o',
             long = "output",
-            value_name = "OUTPUT_PATH",
-            default_value = "tmp/output.wav"
+            value_name = "OUTPUT_PATH"
         )]
-        save_path: String,
+        save_path: Option<String>,
     },
 
     /// Read from a file path and generate a speech file for each line
@@ -99,51 +102,57 @@ enum Mode {
         input_path: String,
 
         /// Format for the output path of each WAV file, where {line} will be replaced with the line number
+        /// Default: {output_dir}/output_{line}.wav (from config)
         #[arg(
             short = 'o',
             long = "output",
-            value_name = "OUTPUT_PATH_FORMAT",
-            default_value = "tmp/output_{line}.wav"
+            value_name = "OUTPUT_PATH_FORMAT"
         )]
-        save_path_format: String,
+        save_path_format: Option<String>,
     },
 
     /// Continuously read from stdin to generate speech, outputting to stdout, for each line
     #[command(aliases = ["stdio", "stdin", "-"], long_flag_aliases = ["stdio", "stdin"])]
     Stream,
-    ///
+
     /// Continuously process piped input by splitting sentences and streaming audio output.
     Pipe {
         /// Output WAV file path
+        /// Default: {output_dir}/pipe_output.wav (from config)
         #[arg(
             short = 'o',
             long = "output",
-            value_name = "OUTPUT_PATH",
-            default_value = "tmp/pipe_output.wav"
+            value_name = "OUTPUT_PATH"
         )]
-        output_path: String,
+        output_path: Option<String>,
     },
+
     /// Start a WebSocket server
     #[command(name = "websocket", alias = "ws", long_flag_aliases = ["websocket", "ws"])]
     WebSocket {
         /// IP address to bind to (typically 127.0.0.1 or 0.0.0.0)
-        #[arg(long, default_value_t = [0, 0, 0, 0].into())]
-        ip: IpAddr,
+        /// Default from config: server.ip
+        #[arg(long)]
+        ip: Option<IpAddr>,
 
         /// Port to expose the WebSocket server on
-        #[arg(long, default_value_t = 8766)]
-        port: u16,
+        /// Default from config: server.websocket_port
+        #[arg(long)]
+        port: Option<u16>,
     },
+
     /// Start an OpenAI-compatible HTTP server
     #[command(name = "openai", alias = "oai", long_flag_aliases = ["oai", "openai"])]
     OpenAI {
         /// IP address to bind to (typically 127.0.0.1 or 0.0.0.0)
-        #[arg(long, default_value_t = [0, 0, 0, 0].into())]
-        ip: IpAddr,
+        /// Default from config: server.ip
+        #[arg(long)]
+        ip: Option<IpAddr>,
 
         /// Port to expose the HTTP server on
-        #[arg(long, default_value_t = 3000)]
-        port: u16,
+        /// Default from config: server.openai_port
+        #[arg(long)]
+        port: Option<u16>,
     },
 
     /// List all available voice styles
@@ -161,33 +170,56 @@ enum Mode {
         #[arg(long)]
         gender: Option<String>,
     },
+
+    /// Show configuration paths and current settings
+    #[command(name = "config", alias = "cfg")]
+    Config {
+        /// Show all configuration paths
+        #[arg(long)]
+        paths: bool,
+
+        /// Initialize config file in global config directory
+        #[arg(long)]
+        init: bool,
+    },
 }
 
-#[derive(Parser, Debug)]
-#[command(name = "kokorox")]
+#[derive(Parser, Debug, Clone)]
+#[command(name = "koko")]
 #[command(version = "0.1")]
 #[command(author = "Lucas Jin, Tommy Falkowski")]
+#[command(about = "Lightning fast text-to-speech CLI using the Kokoro model")]
+#[command(after_help = "Configuration files are loaded from (highest to lowest priority):
+  1. --config <file>
+  2. Environment variables (KOKO_*)
+  3. ./config.toml (local)
+  4. $XDG_CONFIG_HOME/koko/config.toml (global)
+
+Run 'koko config --paths' to see configuration paths.
+Run 'koko config --init' to create a default config file.")]
 struct Cli {
+    /// Path to a custom config file (highest priority)
+    #[arg(short = 'c', long = "config", value_name = "CONFIG_FILE", global = true)]
+    config_file: Option<String>,
+
     /// A language identifier from
     /// https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md
-    /// Common values: en-us, en-gb, es, fr-fr, de, zh, ja, pt-pt
+    /// Common values: en-us, en-gb, es, fr, de, zh, ja, pt-pt
     #[arg(
         short = 'l',
         long = "lan",
-        value_name = "LANGUAGE",
-        default_value = "en-us"
+        value_name = "LANGUAGE"
     )]
-    lan: String,
+    lan: Option<String>,
 
     /// Auto-detect language from input text
     /// When enabled, the system will attempt to detect the language from the input text
     #[arg(
         short = 'a',
         long = "auto-detect",
-        value_name = "AUTO_DETECT",
-        default_value_t = false
+        value_name = "AUTO_DETECT"
     )]
-    auto_detect: bool,
+    auto_detect: Option<bool>,
 
     /// Override style selection
     /// When enabled, this will use the specified style (set with -s/--style)
@@ -195,10 +227,9 @@ struct Cli {
     /// Without this flag, the system tries to use language-appropriate voices.
     #[arg(
         long = "force-style",
-        value_name = "FORCE_STYLE",
-        default_value_t = false
+        value_name = "FORCE_STYLE"
     )]
-    force_style: bool,
+    force_style: Option<bool>,
 
     /// Path to the Kokoro v1.0 ONNX model on the filesystem (optional, defaults to HF cache)
     #[arg(short = 'm', long = "model", value_name = "MODEL_PATH")]
@@ -213,12 +244,17 @@ struct Cli {
     #[arg(long = "model-type", value_name = "MODEL_TYPE")]
     model_type: Option<String>,
 
+    /// Force use of Chinese model (v1.1-zh) regardless of language setting.
+    /// Normally the model is auto-selected: Chinese text uses v1.1-zh, others use v1.0.
+    /// Use this flag to override auto-selection (e.g., to test English voices on Chinese model).
+    #[arg(long = "chinese")]
+    chinese: bool,
+
     /// Silent Mode: If set to true, don't play audio when using Pipe  
     #[arg(
         short = 'x',
         long = "silent",
-        value_name = "SILENT",
-        default_value_t = false
+        value_name = "SILENT"
     )]
     silent: bool,
 
@@ -235,10 +271,9 @@ struct Cli {
     #[arg(
         short = 's',
         long = "style",
-        value_name = "STYLE",
-        default_value = "af_heart"
+        value_name = "STYLE"
     )]
-    style: String,
+    style: Option<String>,
 
     /// Rate of speech, as a coefficient of the default
     /// (i.e. 0.0 to 1.0 is slower than default,
@@ -246,14 +281,13 @@ struct Cli {
     #[arg(
         short = 'p',
         long = "speed",
-        value_name = "SPEED",
-        default_value_t = 1.0
+        value_name = "SPEED"
     )]
-    speed: f32,
+    speed: Option<f32>,
 
     /// Output audio in mono (as opposed to stereo)
-    #[arg(long = "mono", default_value_t = false)]
-    mono: bool,
+    #[arg(long = "mono")]
+    mono: Option<bool>,
 
     /// Initial silence duration in tokens
     #[arg(long = "initial-silence", value_name = "INITIAL_SILENCE")]
@@ -264,31 +298,103 @@ struct Cli {
     #[arg(
         short = 'v',
         long = "verbose",
-        help = "Enable verbose debug logs for text processing",
-        default_value_t = false
+        help = "Enable verbose debug logs for text processing"
     )]
-    verbose: bool,
+    verbose: Option<bool>,
 
     /// Enable detailed accent debugging for non-English languages
     /// Shows character-by-character analysis of accented characters
     #[arg(
         long = "debug-accents",
-        help = "Enable detailed accent debugging for non-English languages",
-        default_value_t = false
+        help = "Enable detailed accent debugging for non-English languages"
     )]
-    debug_accents: bool,
+    debug_accents: Option<bool>,
 
     /// Use input as IPA phonemes instead of graphemes (bypasses phonemizer)
     /// When enabled, the input text is treated as IPA phonemes and sent directly to the tokenizer
     #[arg(
         long = "phonemes",
-        help = "Treat input as IPA phonemes instead of text (bypasses phonemizer)",
-        default_value_t = false
+        help = "Treat input as IPA phonemes instead of text (bypasses phonemizer)"
     )]
     phonemes: bool,
 
     #[command(subcommand)]
     mode: Mode,
+}
+
+/// Resolved configuration after merging CLI args with config file
+/// CLI args take priority over config file values
+struct ResolvedConfig {
+    lan: String,
+    auto_detect: bool,
+    force_style: bool,
+    model_path: Option<String>,
+    data_path: Option<String>,
+    model_type: Option<String>,
+    chinese: bool,
+    silent: bool,
+    style: String,
+    speed: f32,
+    mono: bool,
+    initial_silence: Option<usize>,
+    verbose: bool,
+    debug_accents: bool,
+    phonemes: bool,
+    output_dir: String,
+    server_ip: String,
+    server_openai_port: u16,
+    server_websocket_port: u16,
+}
+
+impl ResolvedConfig {
+    /// Merge CLI arguments with config file, CLI takes priority
+    fn from_cli_and_config(cli: &Cli, config: &AppConfig) -> Self {
+        // For Option<bool> flags, None means not specified on CLI, so use config
+        // For bool flags (like chinese, silent, phonemes), they default to false if not specified
+        Self {
+            lan: cli.lan.clone().unwrap_or_else(|| config.language.clone()),
+            auto_detect: cli.auto_detect.unwrap_or(config.auto_detect),
+            force_style: cli.force_style.unwrap_or(config.force_style),
+            model_path: cli.model_path.clone().or_else(|| config.model_path.clone()),
+            data_path: cli.data_path.clone().or_else(|| config.data_path.clone()),
+            model_type: cli.model_type.clone().or_else(|| config.model_type.clone()),
+            chinese: cli.chinese,
+            silent: cli.silent,
+            style: cli.style.clone().unwrap_or_else(|| config.style.clone()),
+            speed: cli.speed.unwrap_or(config.speed),
+            mono: cli.mono.unwrap_or(config.mono),
+            initial_silence: cli.initial_silence.or(config.initial_silence),
+            verbose: cli.verbose.unwrap_or(config.verbose),
+            debug_accents: cli.debug_accents.unwrap_or(config.debug_accents),
+            phonemes: cli.phonemes,
+            output_dir: expand_path(&config.output_dir),
+            server_ip: config.server.ip.clone(),
+            server_openai_port: config.server.openai_port,
+            server_websocket_port: config.server.websocket_port,
+        }
+    }
+
+    /// Get the output path for text mode
+    fn text_output_path(&self, cli_path: &Option<String>) -> String {
+        cli_path.clone().unwrap_or_else(|| format!("{}/output.wav", self.output_dir))
+    }
+
+    /// Get the output path format for file mode
+    fn file_output_path_format(&self, cli_path: &Option<String>) -> String {
+        cli_path.clone().unwrap_or_else(|| format!("{}/output_{{line}}.wav", self.output_dir))
+    }
+
+    /// Get the output path for pipe mode
+    fn pipe_output_path(&self, cli_path: &Option<String>) -> String {
+        cli_path.clone().unwrap_or_else(|| format!("{}/pipe_output.wav", self.output_dir))
+    }
+
+    /// Get the server IP address
+    fn get_server_ip(&self, cli_ip: &Option<IpAddr>) -> IpAddr {
+        cli_ip.unwrap_or_else(|| {
+            self.server_ip.parse().unwrap_or_else(|_| [0, 0, 0, 0].into())
+        })
+    }
 }
 
 /// Function to preprocess text before segmentation to prevent issues with incomplete sentences
@@ -883,45 +989,150 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
-        let mut cli = Cli::parse();
+        let cli = Cli::parse();
+        
+        // Handle config subcommand first (doesn't need TTS loaded)
+        if let Mode::Config { paths, init } = &cli.mode {
+            if *paths {
+                AppConfig::print_paths();
+            }
+            if *init {
+                if let Err(e) = AppConfig::ensure_config_exists() {
+                    eprintln!("Failed to create config: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            if !*paths && !*init {
+                // Show current config
+                AppConfig::print_paths();
+                println!();
+                match AppConfig::load(cli.config_file.as_deref()) {
+                    Ok(config) => {
+                        println!("Current configuration:");
+                        println!("  output_dir: {}", config.output_dir);
+                        println!("  language: {}", config.language);
+                        println!("  style: {}", config.style);
+                        println!("  speed: {}", config.speed);
+                        println!("  auto_detect: {}", config.auto_detect);
+                        println!("  force_style: {}", config.force_style);
+                        println!("  mono: {}", config.mono);
+                        println!("  verbose: {}", config.verbose);
+                        println!("  server.ip: {}", config.server.ip);
+                        println!("  server.openai_port: {}", config.server.openai_port);
+                        println!("  server.websocket_port: {}", config.server.websocket_port);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to load config: {}", e);
+                    }
+                }
+            }
+            return Ok(());
+        }
+        
+        // Load configuration (CLI args will override these)
+        let app_config = match AppConfig::load(cli.config_file.as_deref()) {
+            Ok(config) => config,
+            Err(e) => {
+                eprintln!("Warning: Failed to load config file: {}", e);
+                eprintln!("Using default configuration.");
+                AppConfig::default()
+            }
+        };
+        
+        // Merge CLI args with config (CLI takes priority)
+        let resolved = ResolvedConfig::from_cli_and_config(&cli, &app_config);
         
         // Auto-enable force_style if the user explicitly changed the style from the default
         // This ensures the specified style is respected
-        if cli.style != "af_heart" && !cli.force_style {
-            println!("Style '{}' specified, automatically enabling force-style.", cli.style);
+        let force_style = if cli.style.is_some() && resolved.style != "af_heart" && !resolved.force_style {
+            println!("Style '{}' specified, automatically enabling force-style.", resolved.style);
             println!("(To use language-based style selection, use the default style 'af_heart')");
-            cli.force_style = true;
-        }
+            true
+        } else {
+            resolved.force_style
+        };
         
-        let Cli {
-            lan,
-            auto_detect,
-            force_style,
-            model_path,
-            data_path,
-            model_type,
-            style,
-            speed,
-            initial_silence,
-            mono,
-            verbose,
-            debug_accents,
-            phonemes,
-            mode,
-            silent,
-        } = cli;
+        // Extract resolved values for easier use
+        let lan = resolved.lan.clone();
+        let auto_detect = resolved.auto_detect;
+        let model_path = resolved.model_path.clone();
+        let data_path = resolved.data_path.clone();
+        let model_type = resolved.model_type.clone();
+        let chinese = resolved.chinese;
+        let style = resolved.style.clone();
+        let speed = resolved.speed;
+        let initial_silence = resolved.initial_silence;
+        let mono = resolved.mono;
+        let verbose = resolved.verbose;
+        let debug_accents = resolved.debug_accents;
+        let phonemes = resolved.phonemes;
+        let silent = resolved.silent;
+        let mode = cli.mode.clone();
 
-        let tts = TTSKoko::new_with_model_type(
+        // Determine model variant based on language
+        // Priority: --chinese flag > explicit -l zh > auto-detect from text
+        let variant = if chinese {
+            // Explicit --chinese flag always wins
+            kokorox::utils::hf_cache::ModelVariant::V1Chinese
+        } else if lan.starts_with("zh") {
+            // Explicit Chinese language specified
+            kokorox::utils::hf_cache::ModelVariant::V1Chinese
+        } else if auto_detect {
+            // Try to detect language from the input text to choose model
+            let sample_text: Option<String> = match &mode {
+                Mode::Text { text, .. } => Some(text.clone()),
+                Mode::File { input_path, .. } => {
+                    // Read first line of file for detection
+                    fs::read_to_string(input_path)
+                        .ok()
+                        .and_then(|content| content.lines().next().map(|s| s.to_string()))
+                }
+                _ => None,
+            };
+            
+            if let Some(text) = sample_text {
+                // Quick check: if text contains Chinese characters, use Chinese model
+                let has_chinese = text.chars().any(|c| {
+                    let cp = c as u32;
+                    // CJK Unified Ideographs and common ranges
+                    (0x4E00..=0x9FFF).contains(&cp) ||  // CJK Unified Ideographs
+                    (0x3400..=0x4DBF).contains(&cp) ||  // CJK Extension A
+                    (0x3000..=0x303F).contains(&cp)     // CJK Punctuation
+                });
+                if has_chinese {
+                    println!("Auto-detected Chinese text, using Chinese model (v1.1-zh)");
+                    kokorox::utils::hf_cache::ModelVariant::V1Chinese
+                } else {
+                    kokorox::utils::hf_cache::ModelVariant::V1English
+                }
+            } else {
+                kokorox::utils::hf_cache::ModelVariant::V1English
+            }
+        } else {
+            kokorox::utils::hf_cache::ModelVariant::V1English
+        };
+        
+        let tts = TTSKoko::new_with_variant(
             model_path.as_deref(), 
             data_path.as_deref(),
-            model_type.as_deref()
+            model_type.as_deref(),
+            variant
         ).await;
 
         match &mode {
+            Mode::Config { .. } => {
+                // Already handled above
+                unreachable!();
+            }
+
             Mode::File {
                 input_path,
                 save_path_format,
             } => {
+                // Use resolved config for output path if not specified on CLI
+                let output_format = resolved.file_output_path_format(save_path_format);
+                ensure_parent_dir_exists(&output_format)?;
+                
                 let file_content = fs::read_to_string(input_path)?;
                 for (i, line) in file_content.lines().enumerate() {
                     let stripped_line = line.trim();
@@ -929,7 +1140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
 
-                    let save_path = save_path_format.replace("{line}", &i.to_string());
+                    let save_path = output_format.replace("{line}", &i.to_string());
                     tts.tts(TTSOpts {
                         txt: stripped_line,
                         lan: &lan,
@@ -946,6 +1157,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             Mode::Text { text, save_path } => {
+                // Use resolved config for output path if not specified on CLI
+                let output_path = resolved.text_output_path(save_path);
+                ensure_parent_dir_exists(&output_path)?;
+                
                 let s = std::time::Instant::now();
                 tts.tts(TTSOpts {
                     txt: text,
@@ -953,7 +1168,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     auto_detect_language: auto_detect,
                     force_style,
                     style_name: &style,
-                    save_path,
+                    save_path: &output_path,
                     mono,
                     speed,
                     initial_silence,
@@ -970,10 +1185,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             Mode::OpenAI { ip, port } => {
-                let app = kokorox_openai::create_server(tts.clone()).await;
-                let addr = SocketAddr::from((*ip, *port));
-                let binding = tokio::net::TcpListener::bind(&addr).await?;
+                // Use resolved config for server settings if not specified on CLI
+                let server_ip = resolved.get_server_ip(ip);
+                let server_port = port.unwrap_or(resolved.server_openai_port);
+                let addr = SocketAddr::from((server_ip, server_port));
                 println!("Starting OpenAI-compatible HTTP server on {addr}");
+                
+                // Use TTSManager for dynamic model switching
+                let manager = TTSManager::with_variant(variant, model_type.clone()).await;
+                let app = kokorox_openai::create_server_with_manager(manager).await;
+                let binding = tokio::net::TcpListener::bind(&addr).await?;
                 kokorox_openai::serve(binding, app.into_make_service()).await?;
 
                 // Clean up resources before exit
@@ -981,9 +1202,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             Mode::WebSocket { ip, port } => {
-                let addr = SocketAddr::from((*ip, *port));
+                // Use resolved config for server settings if not specified on CLI
+                let server_ip = resolved.get_server_ip(ip);
+                let server_port = port.unwrap_or(resolved.server_websocket_port);
+                let addr = SocketAddr::from((server_ip, server_port));
                 println!("Starting WebSocket server on {addr}");
-                kokorox_websocket::start_server(tts.clone(), addr).await?;
+                
+                // Use TTSManager for dynamic model switching
+                // Initialize with the currently selected variant
+                let manager = TTSManager::with_variant(variant, model_type.clone()).await;
+                kokorox_websocket::start_server_with_manager(manager, addr).await?;
 
                 tts.cleanup();
             }
@@ -1038,7 +1266,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            Mode::Pipe { output_path } => {
+            Mode::Pipe { output_path: cli_output_path } => {
+                // Use resolved config for output path if not specified on CLI
+                let output_path = resolved.pipe_output_path(cli_output_path);
+                ensure_parent_dir_exists(&output_path)?;
+                
                 // Create an asynchronous reader for stdin.
                 let stdin = tokio::io::stdin();
                 let mut reader = BufReader::new(stdin);
@@ -1077,8 +1309,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 // Also create a WAV file to write the output.
-                ensure_parent_dir_exists(output_path)?;
-                let mut wav_file = std::fs::File::create(output_path)?;
+                ensure_parent_dir_exists(&output_path)?;
+                let mut wav_file = std::fs::File::create(&output_path)?;
                 let header = WavHeader::new(1, tts.sample_rate(), 32);
                 header.write_header(&mut wav_file)?;
                 wav_file.flush()?;

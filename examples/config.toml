@@ -1,0 +1,139 @@
+# Example Koko TTS Configuration
+# 
+# Copy this file to one of the following locations:
+#   - $XDG_CONFIG_HOME/koko/config.toml (recommended on Linux/macOS)
+#   - ~/.config/koko/config.toml (fallback if XDG_CONFIG_HOME is not set)
+#   - ./config.toml (local directory, higher priority)
+#
+# Or specify a custom config file with: koko --config /path/to/config.toml
+#
+# Configuration priority (highest to lowest):
+#   1. Command line arguments (always win)
+#   2. Config file specified via --config flag
+#   3. Environment variables (KOKO_*)
+#   4. Local config file (./config.toml)
+#   5. Global config file ($XDG_CONFIG_HOME/koko/config.toml)
+#
+# Environment variables:
+#   Use KOKO_ prefix with SCREAMING_SNAKE_CASE, e.g.:
+#   - KOKO_OUTPUT_DIR=/custom/path
+#   - KOKO_LANGUAGE=es
+#   - KOKO_STYLE=ef_dora
+#   - KOKO_SPEED=1.2
+#   - KOKO_SERVER__OPENAI_PORT=8080 (use double underscore for nested values)
+#
+# Path expansion:
+#   Paths support ~ and $ENV_VAR expansion, e.g.:
+#   - output_dir = "~/audio/koko"
+#   - output_dir = "$HOME/audio/koko"
+#   - model_path = "$XDG_DATA_HOME/koko/models/custom.onnx"
+
+# =============================================================================
+# Output Settings
+# =============================================================================
+
+# Output directory for generated audio files
+# Default: "tmp" (relative to current directory)
+# Examples:
+#   output_dir = "tmp"
+#   output_dir = "~/koko-output"
+#   output_dir = "tmp"
+output_dir = "$XDG_STATE_HOME/koko/output"
+
+# =============================================================================
+# Language and Voice Settings
+# =============================================================================
+
+# Default language for TTS
+# Common values: en-us, en-gb, es, fr, de, zh, ja, pt-pt
+# See: https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md
+language = "en-us"
+
+# Default voice style
+# Available voices depend on the loaded voice pack.
+#
+# Standard voices:
+#   English US:  af_heart, af_sarah, af_nicole, am_adam, am_michael
+#   English UK:  bf_emma, bf_lily, bm_george, bm_lewis
+#   Spanish:     ef_dora, em_alex
+#   Portuguese:  pf_dora, pm_alex
+#   French:      ff_siwis
+#   Japanese:    jf_alpha, jf_gongitsune, jm_kumo
+#   Chinese:     zf_xiaobei, zf_xiaoni, zm_yunjian, zm_yunxi
+#
+# Voice mixing:
+#   Blend multiple voices using format: voice1.weight+voice2.weight
+#   Weights are integers 0-10 (e.g., af_sarah.4+af_nicole.6 = 40% + 60%)
+#   Example: style = "af_sarah.4+af_nicole.6"
+style = "af_heart"
+
+# Speech speed (1.0 = normal, <1.0 = slower, >1.0 = faster)
+# Recommended range: 0.5 to 2.0
+speed = 1.3
+
+# Auto-detect language from input text
+# When true, the system analyzes input text and selects appropriate language/voice
+# When false, uses the language setting specified above
+auto_detect = false
+
+# Force the specified style regardless of language
+# When true, uses the style setting even if it doesn't match the detected language
+# When false, the system may auto-select a language-appropriate voice
+force_style = false
+
+# Output audio in mono format
+# When true, outputs single-channel audio
+# When false, outputs stereo (duplicated mono) audio
+mono = false
+
+# =============================================================================
+# Model Settings
+# =============================================================================
+
+# Path to custom ONNX model file
+# If not specified, downloads from HuggingFace automatically
+# Example: model_path = "$XDG_DATA_HOME/koko/models/kokoro-v1.0.onnx"
+# model_path = ""
+
+# Path to custom voices data file
+# If not specified, downloads from HuggingFace automatically
+# Example: data_path = "$XDG_DATA_HOME/koko/voices/voices-v1.0.bin"
+# data_path = ""
+
+# Model type for HuggingFace downloads
+# Options: fp16, q4, q4f16, q8f16, quantized, uint8, uint8f16
+# Quantized models are smaller but may have slightly lower quality
+# model_type = "fp16"
+
+# =============================================================================
+# Advanced Settings
+# =============================================================================
+
+# Initial silence duration in tokens
+# Adds silence at the beginning of generated audio
+# Useful for preventing clipping at start of playback
+# initial_silence = 0
+
+# Enable verbose debug output
+# Shows detailed processing information for troubleshooting
+verbose = false
+
+# Enable detailed accent debugging
+# Shows character-by-character analysis of accented characters
+# Useful for debugging non-English language issues
+debug_accents = false
+
+# =============================================================================
+# Server Configuration
+# =============================================================================
+[server]
+# IP address to bind servers to
+# "0.0.0.0" = all interfaces (accessible from network)
+ip = "127.0.0.1" # = localhost only (more secure)
+# ip = "0.0.0.0"
+
+# Port for OpenAI-compatible HTTP server (koko openai)
+openai_port = 3064
+
+# Port for WebSocket server (koko websocket)
+websocket_port = 8766

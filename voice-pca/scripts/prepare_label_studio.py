@@ -73,8 +73,8 @@ def create_label_studio_tasks(
             type_display = f"Inter-language ({', '.join(languages[:3])})"
 
         # Audio URL for Label Studio
-        # Use relative path from audio_dir
-        audio_url = f"{audio_url_prefix}{quote(str(audio_file.absolute()))}"
+        # Use just the filename - the path should be relative to LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT
+        audio_url = f"{audio_url_prefix}{quote(audio_file.name)}"
 
         task = {
             "data": {
@@ -215,22 +215,23 @@ def main():
     print("\n" + "=" * 50)
     print("Label Studio Setup Instructions:")
     print("=" * 50)
-    print("""
+    print(f"""
 1. Install Label Studio:
    pip install label-studio
 
-2. Start Label Studio with local file serving:
-   LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true label-studio start
+2. Start Label Studio with local file serving enabled:
+   LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true \\
+   LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT={args.audio_dir.absolute()} \\
+   label-studio start
 
 3. Create a new project and import:
    - Labeling config: config/label_studio_config.xml
    - Tasks: data/label_studio_tasks.json
 
-4. Configure storage (Settings > Cloud Storage):
-   - Add Local Files storage
-   - Set root directory to your audio folder
+4. Start annotating!
 
-5. Start annotating!
+Note: The LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT must point to your audio directory.
+Audio URLs in tasks are: /data/local-files/?d=<filename.wav>
 """)
 
     return 0

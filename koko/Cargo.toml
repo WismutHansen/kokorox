@@ -25,3 +25,7 @@ sentence_segmentation = "1.2.0"
 rodio = "0.20.1"
 ctrlc = "3.4.1"
 regex = "1.10.3"
+config = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+dirs = "5.0"
+shellexpand = "3.1"

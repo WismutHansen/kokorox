@@ -1,3 +1,4 @@
+pub mod chinese;
 pub mod koko;
 pub mod normalize;
 pub mod phonemizer;
