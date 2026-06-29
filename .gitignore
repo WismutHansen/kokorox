@@ -10,3 +10,4 @@ data/*
 docs/
 
 scripts/checkpoints/*
+.pi/todos/
